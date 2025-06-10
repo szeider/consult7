@@ -92,31 +92,6 @@ uvx consult7 --api-key "AIza..." --provider google --test
 uvx consult7 --api-key "sk-proj-..." --provider openai --test
 ```
 
-### Using Specific Models
-
-```bash
-# OpenRouter with Claude
-uvx consult7 --api-key "sk-or-v1-..." --model "anthropic/claude-3.5-sonnet"
-
-# Google AI with 2M token model
-uvx consult7 --api-key "AIza..." --provider google --model "gemini-2.5-pro-preview-06-05" --context 2M
-
-# OpenAI with GPT-4o mini and custom context
-uvx consult7 --api-key "sk-proj-..." --provider openai --model "gpt-4o-mini" --context 128K
-```
-
-### Context Window Examples
-
-```bash
-# Use 2 million token context
-uvx consult7 --api-key "..." --provider google --context 2M
-
-# Use 128K token context
-uvx consult7 --api-key "..." --provider openai --context 128K
-
-# Use exact token count
-uvx consult7 --api-key "..." --context 500000
-```
 
 ## MCP Configuration
 
@@ -127,53 +102,29 @@ Add to your Claude Desktop configuration file:
 **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
-#### OpenRouter (Default)
-
 ```json
 {
   "mcpServers": {
     "consult7": {
       "command": "uvx",
       "args": [
+        "--from", "git+https://github.com/szeider/consult7",
         "consult7",
-        "--api-key", "your-openrouter-api-key"
+        "--api-key", "your-api-key",
+        "--provider", "openrouter",
+        "--model", "qwen/qwen-turbo",
+        "--context", "1M"
       ]
     }
   }
 }
 ```
 
-#### Google AI
-```json
-{
-  "mcpServers": {
-    "consult7": {
-      "command": "uvx",
-      "args": [
-        "consult7",
-        "--api-key", "your-google-api-key",
-        "--provider", "google"
-      ]
-    }
-  }
-}
-```
-
-#### OpenAI
-```json
-{
-  "mcpServers": {
-    "consult7": {
-      "command": "uvx",
-      "args": [
-        "consult7",
-        "--api-key", "your-openai-api-key",
-        "--provider", "openai"
-      ]
-    }
-  }
-}
-```
+**Configuration parameters:**
+- `--api-key`: Required. Your API key for the chosen provider
+- `--provider`: Optional. Choose from `openrouter` (default), `google`, or `openai`
+- `--model`: Optional. Specific model to use (defaults: openrouter → `google/gemini-2.5-pro-preview`, google → `gemini-2.0-flash-exp`, openai → `gpt-4o`)
+- `--context`: Optional. Model context window (default: 1M). Use `2M` for Google Gemini models, `128K` for OpenAI
 
 ### For Claude Code
 
@@ -193,68 +144,3 @@ The server provides a single tool called `consultation` that:
 - `query`: Your question about the code
 - `exclude_pattern`: Optional regex to exclude files
 
-## Configuration
-
-**Ignored by default:**
-- `__pycache__`
-- `.env`
-- `secrets.py`
-- `.DS_Store`
-- `.git`
-- `node_modules`
-
-**Size limits:**
-- 10MB per file
-- 100MB total
-- 100KB response
-
-## API Key Setup
-
-### OpenRouter
-1. Sign up at https://openrouter.ai
-2. Get your API key from the dashboard
-3. Format: `sk-or-v1-...`
-
-### Google AI
-1. Visit https://makersuite.google.com/app/apikey
-2. Create a new API key
-3. Format: `AIza...`
-
-### OpenAI
-1. Visit https://platform.openai.com/api-keys
-2. Create a new API key
-3. Format: `sk-proj-...`
-
-## Choosing a Provider
-
-- **OpenRouter**: Best for flexibility and access to multiple models
-- **Google AI**: Best for largest context windows (use --context 2M for newer Gemini models)
-- **OpenAI**: Best for GPT-4o's advanced reasoning capabilities
-
-## Context Window Notes
-
-- Default: 1M tokens (suitable for most models)
-- Google Gemini models support up to 2M tokens (use `--context 2M`)
-- OpenAI models typically support 128K tokens (use `--context 128K`)
-- OpenRouter auto-detects the model's context size when `--context` is not specified
-
-## Supported Providers
-
-### OpenRouter (Default)
-
-- Access to multiple models through a unified API
-- Default model: `google/gemini-2.5-pro-preview`
-- Supports Anthropic, Google, Meta, and other providers
-- Auto-detects context size from API when --context not specified
-
-### Google AI (Direct)
-
-- Direct access to Gemini models
-- Default model: `gemini-2.0-flash-exp`
-- Popular models: `gemini-2.5-pro-preview-06-05`, `gemini-2.5-flash-preview-05-20`
-
-### OpenAI
-
-- Access to GPT models
-- Default model: `gpt-4o`
-- Also supports: `gpt-4o-mini`, `gpt-4.1-nano-2025-04-14`

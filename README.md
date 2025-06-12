@@ -32,32 +32,19 @@ When working with AI agents that have limited context windows (like Claude with 
 
 ## Installation
 
-Add to your Claude Desktop configuration file:
-
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`  
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-For Claude Code, add to your settings (⌘+, on Mac) under `"claude-code.mcpServers"` instead.
-
-No installation required - `uvx` automatically downloads and runs consult7 in an isolated environment.
+For **Claude Code**, simply run:
 
 ```json
-{
-  "mcpServers": {
-    "consult7": {
-      "command": "uvx",
-      "args": [
-        "consult7",
-        "--api-key", "your-api-key",
-        "--provider", "openrouter",
-        "--model", "qwen/qwen-turbo",
-        "--context", "1M"
-      ]
-    }
-  }
-}
-```
+claude mcp add-json --scope user consult7 '{
+    "type": "stdio",
+    "command": "uvx",
+    "args": ["consult7",
+      "--api-key", "your-api-key",
+      "--model", "google/gemini-2.5-pro-preview" ]
+  }' 
+```json
 
+No installation required - `uvx` automatically downloads and runs consult7 in an isolated environment.
 
 
 ## Command Line Options

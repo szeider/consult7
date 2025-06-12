@@ -1,16 +1,16 @@
 # Consult7 MCP Server
 
-**Consult7** is a Model Context Protocol (MCP) server that enables AI agents to consult large context window models for analyzing extensive file collections - entire codebases, document repositories, or mixed content that exceed the current agent's context limits. Supports providers Openrouter, OpenAI, and Google.
+**Consult7** is a Model Context Protocol (MCP) server that enables AI agents to consult large context window models for analyzing extensive file collections - entire codebases, document repositories, or mixed content that exceed the current agent's context limits. Supports providers *Openrouter*, *OpenAI*, and *Google*.
 
 ## Why Consult7?
 
 When working with AI agents that have limited context windows (like Claude with 200K tokens), **Consult7** allows them to leverage models with massive context windows to analyze large codebases or document collections that would otherwise be impossible to process in a single query.
 
-
-
 > "For Claude Code users, Consult7 is a game changer."
 
+## How it works
 
+**Consult7** recursively collects all files from a given path that match your regex pattern (including all subdirectories), assembles them into a single context, and sends them to a large context window model along with your query. The result of this query is directly fed back to the agent you are working with.
 
 ## Example Use Cases
 
@@ -34,7 +34,7 @@ When working with AI agents that have limited context windows (like Claude with 
 
 For **Claude Code**, simply run:
 
-```json
+```bash
 claude mcp add-json --scope user consult7 '{
     "type": "stdio",
     "command": "uvx",
@@ -42,7 +42,7 @@ claude mcp add-json --scope user consult7 '{
       "--api-key", "your-api-key",
       "--model", "google/gemini-2.5-pro-preview" ]
   }' 
-```json
+```
 
 No installation required - `uvx` automatically downloads and runs consult7 in an isolated environment.
 
@@ -70,5 +70,13 @@ uvx consult7 --api-key "AIza..." --provider google --test
 
 # Test OpenAI
 uvx consult7 --api-key "sk-proj-..." --provider openai --test
+```
+
+## Uninstalling
+
+To remove consult7 from Claude Code (or before reinstalling):
+
+```bash
+claude mcp remove consult7 --scope user
 ```
 

@@ -38,12 +38,29 @@ DEFAULT_IGNORED = [
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODELS_URL = "https://openrouter.ai/api/v1/models"
 
-# Provider-specific defaults
-DEFAULT_MODELS = {
-    "openrouter": "google/gemini-2.5-pro-preview",
-    "google": "gemini-2.0-flash-exp",
-    "openai": "gpt-4o",
+# ==============================================================================
+# MODEL EXAMPLES - Update these when new models become available
+# ==============================================================================
+MODEL_EXAMPLES = {
+    "openrouter": [
+        '"google/gemini-2.5-pro-preview" (intelligent, 1M context)',
+        '"google/gemini-2.5-flash-preview-05-20" (fast, 1M context)',
+        '"google/gemini-2.5-flash-preview-05-20:thinking" (reasoning, 1M context)',
+        '"anthropic/claude-opus-4" (very intelligent, 200k context)',
+    ],
+    "google": [
+        '"gemini-2.5-flash-preview-05-20" (fast, 1M context)',
+        '"gemini-2.5-pro-preview-06-05" (intelligent, 1M context)',
+        '"gemini-2.0-flash-thinking-exp-01-21" (reasoning, 32k context)',
+    ],
+    "openai": [
+        '"o4-mini-2025-04-16|200k" (intelligent, reasoning)',
+        '"o3-2025-04-16|200k" (very intelligent, reasoning)',
+        '"gpt-4.1-2025-04-14|1047576" (fast, huge context)',
+        '"gpt-4.1-nano-2025-04-14|1047576" (very fast, huge context)',
+    ],
 }
+# ==============================================================================
 
 # Model context limits (updated dynamically)
 model_context_length = None
@@ -56,7 +73,6 @@ mcp = FastMCP("Consult7")
 # Global variables for CLI args (will be set in main)
 api_key = None
 provider = "openrouter"  # default provider
-model = None  # Will be set based on provider
 
 
 def estimate_tokens(text: str) -> int:
@@ -244,17 +260,41 @@ def format_content(
     return "\n".join(content_parts), total_size
 
 
-def get_google_model_info() -> dict:
+async def get_google_model_info(model_name: str) -> Optional[dict]:
     """Get model information for Google models."""
-    return {"context_length": model_context_length, "provider": "google"}
+    if not GOOGLE_AVAILABLE:
+        return None
+
+    try:
+        from google import genai
+
+        client = genai.Client(api_key=api_key)
+
+        # Ensure model name has correct format
+        if not model_name.startswith("models/"):
+            model_name = f"models/{model_name}"
+
+        model_info = client.models.get(model=model_name)
+
+        # Return context info in consistent format
+        return {
+            "context_length": model_info.input_token_limit,
+            "max_output_tokens": model_info.output_token_limit,
+            "provider": "google",
+        }
+    except Exception as e:
+        print(f"Warning: Could not fetch Google model info: {e}")
+        return None
 
 
-def get_openai_model_info() -> dict:
+def get_openai_model_info(model_name: str) -> Optional[dict]:
     """Get model information for OpenAI models."""
-    return {"context_length": model_context_length, "provider": "openai"}
+    # OpenAI API doesn't provide context length via API
+    # Context must be specified by the user
+    return None  # No default context - must be specified
 
 
-async def get_model_info() -> Optional[dict]:
+async def get_openrouter_model_info(model_name: str) -> Optional[dict]:
     """Get model information from OpenRouter API."""
     if not api_key:
         return None
@@ -273,9 +313,20 @@ async def get_model_info() -> Optional[dict]:
 
             models = response.json().get("data", [])
             for model_info in models:
-                if model_info.get("id") == model:
-                    return model_info
+                if model_info.get("id") == model_name:
+                    # Return in consistent format
+                    return {
+                        "context_length": model_info.get("context_length", 128000),
+                        "max_output_tokens": model_info.get(
+                            "max_completion_tokens", 4096
+                        ),
+                        "provider": "openrouter",
+                        "pricing": model_info.get("pricing"),
+                        "raw_info": model_info,  # Keep full info for debugging
+                    }
 
+            # Model not found in list
+            print(f"Warning: Model '{model_name}' not found in OpenRouter models list")
             return None
 
     except Exception as e:
@@ -283,7 +334,63 @@ async def get_model_info() -> Optional[dict]:
         return None
 
 
-async def call_google(content: str, query: str) -> tuple[str, Optional[str]]:
+async def get_model_context_info(model_name: str) -> Optional[dict]:
+    """Get model context information based on provider and model."""
+    global model_context_length
+
+    try:
+        # Parse model name for OpenAI models with context specification
+        actual_model_name = model_name
+        specified_context = None
+
+        if provider == "openai" and "|" in model_name:
+            actual_model_name, context_str = model_name.split("|", 1)
+            # Parse context like "200k" -> 200000, "1047576" -> 1047576
+            if context_str.endswith("k"):
+                specified_context = int(float(context_str[:-1]) * 1000)
+            else:
+                specified_context = int(context_str)
+
+        # Get model info based on provider
+        if provider == "google":
+            info = await get_google_model_info(actual_model_name)
+        elif provider == "openai":
+            # OpenAI requires context to be specified
+            if not specified_context:
+                raise ValueError(
+                    f"OpenAI models require context length specification. Use format: '{actual_model_name}|128k' or '{actual_model_name}|200000'"
+                )
+            info = {
+                "context_length": specified_context,
+                "max_output_tokens": 16384,  # OpenAI models typically support this
+                "provider": "openai",
+            }
+        else:  # openrouter
+            info = await get_openrouter_model_info(actual_model_name)
+
+        if info and "context_length" in info:
+            model_context_length = info["context_length"]
+            return info
+
+        # Fallback to default if no info available
+        print(
+            f"Warning: Could not determine context length for {model_name}, using default of 128k tokens"
+        )
+        model_context_length = 128000
+        return {"context_length": 128000, "provider": provider}
+
+    except ValueError:
+        # Re-raise ValueError to be caught by caller
+        raise
+    except Exception as e:
+        print(f"Error getting model info: {e}")
+        model_context_length = 128000
+        return {"context_length": 128000, "provider": provider}
+
+
+async def call_google(
+    content: str, query: str, model_name: str
+) -> tuple[str, Optional[str]]:
     """
     Call Google AI API with the content and query.
     Returns (response, error)
@@ -294,6 +401,13 @@ async def call_google(content: str, query: str) -> tuple[str, Optional[str]]:
     if not api_key:
         return "", "No API key provided. Use --api-key flag"
 
+    # Get model context info
+    try:
+        model_info = await get_model_context_info(model_name)
+        context_length = model_info.get("context_length", 128000)
+    except ValueError as e:
+        return "", str(e)
+
     # Estimate tokens for the input
     system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
     user_msg = f"Here are the files to analyze:\n\n{content}\n\nQuery: {query}"
@@ -301,25 +415,24 @@ async def call_google(content: str, query: str) -> tuple[str, Optional[str]]:
     estimated_tokens = estimate_tokens(total_input)
 
     # Check against model context limit
-    if model_context_length:
-        max_output_tokens = 65536  # Google's max output
-        available_for_input = int(
-            (model_context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
-        )
+    max_output_tokens = model_info.get("max_output_tokens", 65536)
+    available_for_input = int(
+        (context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
+    )
 
-        if estimated_tokens > available_for_input:
-            return "", (
-                f"Content too large: ~{estimated_tokens:,} tokens estimated, "
-                f"but model {model} has only ~{available_for_input:,} tokens available for input "
-                f"(total limit: {model_context_length:,}, reserved for output: {max_output_tokens:,}). "
-                f"Try reducing file count/size."
-            )
+    if estimated_tokens > available_for_input:
+        return "", (
+            f"Content too large: ~{estimated_tokens:,} tokens estimated, "
+            f"but model {model_name} has only ~{available_for_input:,} tokens available for input "
+            f"(total limit: {context_length:,}, reserved for output: {max_output_tokens:,}). "
+            f"Try reducing file count/size."
+        )
 
     try:
         client = genai.Client(api_key=api_key)
 
         response = await client.aio.models.generate_content(
-            model=model,
+            model=model_name,
             contents=f"{system_msg}\n\n{user_msg}",
             config=types.GenerateContentConfig(
                 max_output_tokens=16000, temperature=0.7
@@ -341,7 +454,9 @@ async def call_google(content: str, query: str) -> tuple[str, Optional[str]]:
         return "", f"Error calling Google AI: {str(e)}"
 
 
-async def call_openai(content: str, query: str) -> tuple[str, Optional[str]]:
+async def call_openai(
+    content: str, query: str, model_name: str
+) -> tuple[str, Optional[str]]:
     """
     Call OpenAI API with the content and query.
     Returns (response, error)
@@ -352,6 +467,16 @@ async def call_openai(content: str, query: str) -> tuple[str, Optional[str]]:
     if not api_key:
         return "", "No API key provided. Use --api-key flag"
 
+    # Get model context info (including parsed context from model|context format)
+    try:
+        model_info = await get_model_context_info(model_name)
+        context_length = model_info.get("context_length", 128000)
+    except ValueError as e:
+        return "", str(e)
+
+    # Extract actual model name (without context specification)
+    actual_model_name = model_name.split("|")[0] if "|" in model_name else model_name
+
     # Estimate tokens for the input
     system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
     user_msg = f"Here are the files to analyze:\n\n{content}\n\nQuery: {query}"
@@ -359,25 +484,24 @@ async def call_openai(content: str, query: str) -> tuple[str, Optional[str]]:
     estimated_tokens = estimate_tokens(total_input)
 
     # Check against model context limit
-    if model_context_length:
-        max_output_tokens = 16000
-        available_for_input = int(
-            (model_context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
-        )
+    max_output_tokens = model_info.get("max_output_tokens", 16000)
+    available_for_input = int(
+        (context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
+    )
 
-        if estimated_tokens > available_for_input:
-            return "", (
-                f"Content too large: ~{estimated_tokens:,} tokens estimated, "
-                f"but model {model} has only ~{available_for_input:,} tokens available for input "
-                f"(total limit: {model_context_length:,}, reserved for output: {max_output_tokens:,}). "
-                f"Try reducing file count/size."
-            )
+    if estimated_tokens > available_for_input:
+        return "", (
+            f"Content too large: ~{estimated_tokens:,} tokens estimated, "
+            f"but model {model_name} has only ~{available_for_input:,} tokens available for input "
+            f"(total limit: {context_length:,}, reserved for output: {max_output_tokens:,}). "
+            f"Try reducing file count/size."
+        )
 
     try:
         client = AsyncOpenAI(api_key=api_key)
 
         response = await client.chat.completions.create(
-            model=model,
+            model=actual_model_name,
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},
@@ -401,13 +525,22 @@ async def call_openai(content: str, query: str) -> tuple[str, Optional[str]]:
         return "", f"Error calling OpenAI: {str(e)}"
 
 
-async def call_openrouter(content: str, query: str) -> tuple[str, Optional[str]]:
+async def call_openrouter(
+    content: str, query: str, model_name: str
+) -> tuple[str, Optional[str]]:
     """
     Call OpenRouter API with the content and query.
     Returns (response, error)
     """
     if not api_key:
         return "", "No API key provided. Use --api-key flag"
+
+    # Get model context info
+    try:
+        model_info = await get_model_context_info(model_name)
+        context_length = model_info.get("context_length", 128000)
+    except ValueError as e:
+        return "", str(e)
 
     # Estimate tokens for the input
     system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
@@ -416,20 +549,19 @@ async def call_openrouter(content: str, query: str) -> tuple[str, Optional[str]]
     estimated_tokens = estimate_tokens(total_input)
 
     # Check against model context limit if known
-    if model_context_length:
-        # Reserve tokens for output
-        max_output_tokens = 16000 if model_context_length > 100000 else 4000
-        available_for_input = int(
-            (model_context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
-        )
+    # Reserve tokens for output
+    max_output_tokens = 16000 if context_length > 100000 else 4000
+    available_for_input = int(
+        (context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
+    )
 
-        if estimated_tokens > available_for_input:
-            return "", (
-                f"Content too large: ~{estimated_tokens:,} tokens estimated, "
-                f"but model {model} has only ~{available_for_input:,} tokens available for input "
-                f"(total limit: {model_context_length:,}, reserved for output: {max_output_tokens:,}). "
-                f"Try using a model with larger context or reducing file count/size."
-            )
+    if estimated_tokens > available_for_input:
+        return "", (
+            f"Content too large: ~{estimated_tokens:,} tokens estimated, "
+            f"but model {model_name} has only ~{available_for_input:,} tokens available for input "
+            f"(total limit: {context_length:,}, reserved for output: {max_output_tokens:,}). "
+            f"Try using a model with larger context or reducing file count/size."
+        )
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -442,13 +574,8 @@ async def call_openrouter(content: str, query: str) -> tuple[str, Optional[str]]
         {"role": "user", "content": user_msg},
     ]
 
-    # Use more tokens for models with large context windows
-    max_output_tokens = (
-        16000 if model_context_length and model_context_length > 100000 else 4000
-    )
-
     data = {
-        "model": model,
+        "model": model_name,
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": max_output_tokens,
@@ -485,11 +612,41 @@ async def call_openrouter(content: str, query: str) -> tuple[str, Optional[str]]
         return "", f"Error calling API: {e}"
 
 
-@mcp.tool()
-async def consultation(
-    path: str, pattern: str, query: str, exclude_pattern: Optional[str] = None
-) -> str:
-    """
+def create_consultation_tool():
+    """Create the consultation tool with provider-specific documentation."""
+    # Get model examples for the configured provider
+    examples = MODEL_EXAMPLES.get(provider, [])
+
+    # Build model parameter description
+    if provider == "openai":
+        model_desc = f"model: The model to use with {provider.title()} (include context length with | separator). Examples:\n"
+    else:
+        model_desc = f"model: The model to use with {provider.title()}. Examples:\n"
+
+    for example in examples:
+        model_desc += f"               - {example}\n"
+    model_desc = model_desc.rstrip()  # Remove trailing newline
+
+    # Build provider-specific notes
+    if provider == "openai":
+        provider_notes = f'- {provider.title()} requires context length specification with | separator: "model-name|128k" or "model-name|200000"'
+    else:
+        provider_notes = (
+            f"- {provider.title()} model context windows are auto-detected from the API"
+        )
+
+    # Get example models for the Examples section
+    # Extract just the model name without attributes
+    if examples:
+        # Split on the closing quote to get just the model name
+        example1 = examples[0].split('"')[1] if '"' in examples[0] else "model-name"
+        example2 = examples[1].split('"')[1] if len(examples) > 1 and '"' in examples[1] else example1
+    else:
+        example1 = "model-name"
+        example2 = example1
+
+    # Build the docstring
+    docstring = f"""
     Consult an LLM about code files matching a pattern in a directory.
 
     This tool collects all files matching a regex pattern from a directory tree,
@@ -508,6 +665,7 @@ async def consultation(
                - "Find all database queries"
                - "Explain the error handling strategy"
                - "List all API endpoints"
+        {model_desc}
         exclude_pattern: Optional regex to exclude files (e.g., ".*test.*" to skip tests)
 
     Returns:
@@ -519,6 +677,7 @@ async def consultation(
             path="/Users/john/backend",
             pattern=".*\\.py$",
             query="How is user authentication implemented? What security measures are in place?",
+            model="{example1}",
             exclude_pattern=".*test.*\\.py$"
         )
 
@@ -527,6 +686,7 @@ async def consultation(
             path="/home/dev/api-server",
             pattern=".*\\.(js|ts)$",
             query="List all REST API endpoints with their HTTP methods and authentication requirements",
+            model="{example2}",
             exclude_pattern="node_modules/.*"
         )
 
@@ -535,51 +695,71 @@ async def consultation(
         - File size limit: 10MB per file, 100MB total (optimized for large context models)
         - Large files are skipped with an error message
         - Includes detailed errors for debugging (permissions, missing paths, etc.)
-        - Default model has 1M+ token context window for analyzing large codebases
+        {provider_notes}
     """
-    # Discover files
-    files, errors = discover_files(path, pattern, exclude_pattern)
 
-    if not files and errors:
-        return "Error: No files found. Errors:\n" + "\n".join(errors)
+    # Define the function WITHOUT the decorator first
+    async def consultation(
+        path: str,
+        pattern: str,
+        query: str,
+        model: str,
+        exclude_pattern: Optional[str] = None,
+    ) -> str:
+        # Discover files
+        files, errors = discover_files(path, pattern, exclude_pattern)
 
-    # Provide immediate feedback about what was found
-    if not files:
-        return f"No files matched pattern '{pattern}' in path '{path}'"
+        if not files and errors:
+            return "Error: No files found. Errors:\n" + "\n".join(errors)
 
-    # Format content
-    content, total_size = format_content(path, files, errors)
+        # Provide immediate feedback about what was found
+        if not files:
+            return f"No files matched pattern '{pattern}' in path '{path}'"
 
-    # Add size information to help the agent
-    size_info = f"\n\n[File collection summary: {len(files)} files, {total_size:,} bytes used of {MAX_TOTAL_SIZE:,} bytes available ({(total_size/MAX_TOTAL_SIZE)*100:.1f}% utilized)]"
+        # Format content
+        content, total_size = format_content(path, files, errors)
 
-    # Estimate tokens
-    full_content = content + size_info
-    estimated_tokens = estimate_tokens(full_content)
-    token_info = f"\nEstimated tokens: ~{estimated_tokens:,}"
-    if model_context_length:
-        token_info += f" (Model limit: {model_context_length:,} tokens)"
+        # Add size information to help the agent
+        size_info = f"\n\n[File collection summary: {len(files)} files, {total_size:,} bytes used of {MAX_TOTAL_SIZE:,} bytes available ({(total_size / MAX_TOTAL_SIZE) * 100:.1f}% utilized)]"
 
-    # Call appropriate LLM based on provider
-    if provider == "google":
-        response, error = await call_google(content + size_info, query)
-    elif provider == "openai":
-        response, error = await call_openai(content + size_info, query)
-    else:  # openrouter (default)
-        response, error = await call_openrouter(content + size_info, query)
+        # Get model context info to display
+        try:
+            model_info = await get_model_context_info(model)
+            model_context_length = model_info.get("context_length", 128000)
+        except ValueError as e:
+            return f"Error: {str(e)}"
 
-    if error:
-        return f"Error calling {provider} LLM: {error}\n\nCollected {len(files)} files ({total_size:,} bytes){token_info}"
+        # Estimate tokens
+        full_content = content + size_info
+        estimated_tokens = estimate_tokens(full_content)
+        token_info = f"\nEstimated tokens: ~{estimated_tokens:,}"
+        if model_context_length:
+            token_info += f" (Model limit: {model_context_length:,} tokens)"
 
-    # Add size info to response for agent awareness
-    return f"{response}\n\n---\nProcessed {len(files)} files ({total_size:,} bytes) with {model} ({provider}){token_info}"
+        # Call appropriate LLM based on provider
+        if provider == "google":
+            response, error = await call_google(content + size_info, query, model)
+        elif provider == "openai":
+            response, error = await call_openai(content + size_info, query, model)
+        else:  # openrouter (default)
+            response, error = await call_openrouter(content + size_info, query, model)
+
+        if error:
+            return f"Error calling {provider} LLM: {error}\n\nCollected {len(files)} files ({total_size:,} bytes){token_info}"
+
+        # Add size info to response for agent awareness
+        return f"{response}\n\n---\nProcessed {len(files)} files ({total_size:,} bytes) with {model} ({provider}){token_info}"
+
+    # Set the docstring BEFORE applying the decorator
+    consultation.__doc__ = docstring
+
+    # Apply the decorator manually and return the decorated function
+    return mcp.tool()(consultation)
 
 
 async def test_api_connection():
     """Test the API connection with a simple query."""
-    print(f"Testing {provider} API connection...")
-    print(f"Model: {model}")
-    print(f"Model context window: {model_context_length:,} tokens")
+    print(f"\nTesting {provider} API connection...")
     print(f"API Key: {'Set' if api_key else 'Not set'}")
 
     if not api_key:
@@ -587,115 +767,101 @@ async def test_api_connection():
         print("Use --api-key flag")
         return False
 
+    # Use a default test model for each provider
+    test_models = {
+        "openrouter": "google/gemini-2.5-flash-preview-05-20",
+        "google": "gemini-2.0-flash-exp",
+        "openai": "gpt-4o-mini|128k",
+    }
+    test_model = test_models.get(provider, "google/gemini-2.5-flash-preview-05-20")
+
     # Simple test query
     test_content = "This is a test file with sample content."
     test_query = "Reply with 'API test successful' if you can read this."
 
     # Call appropriate provider
     if provider == "google":
-        response, error = await call_google(test_content, test_query)
+        response, error = await call_google(test_content, test_query, test_model)
     elif provider == "openai":
-        response, error = await call_openai(test_content, test_query)
+        response, error = await call_openai(test_content, test_query, test_model)
     else:  # openrouter
-        response, error = await call_openrouter(test_content, test_query)
+        response, error = await call_openrouter(test_content, test_query, test_model)
 
     if error:
         print(f"\nError: {error}")
         return False
 
-    print(f"\nSuccess! Response from {model} ({provider}):")
+    print(f"\nSuccess! Response from {test_model} ({provider}):")
     print(response)
     return True
 
 
 def main():
     """Parse command line arguments and run the server."""
-    global api_key, model, provider, model_context_length
+    global api_key, provider
 
     # Simple argument parsing
     args = sys.argv[1:]
-    i = 0
     test_mode = False
-    context_param = None
 
-    while i < len(args):
-        if args[i] == "--api-key" and i + 1 < len(args):
-            api_key = args[i + 1]
-            i += 2
-        elif args[i] == "--provider" and i + 1 < len(args):
-            provider = args[i + 1]
-            if provider not in ["openrouter", "google", "openai"]:
-                print(
-                    f"Error: Invalid provider '{provider}'. Must be 'openrouter', 'google', or 'openai'"
-                )
-                sys.exit(1)
-            i += 2
-        elif args[i] == "--model" and i + 1 < len(args):
-            model = args[i + 1]
-            i += 2
-        elif args[i] == "--context" and i + 1 < len(args):
-            context_param = args[i + 1]
-            i += 2
-        elif args[i] == "--test":
-            test_mode = True
-            i += 1
-        else:
-            print(f"Unknown argument: {args[i]}")
-            print(
-                "Usage: consult7.py --api-key KEY [--provider PROVIDER] [--model MODEL] [--context TOKENS] [--test]"
-            )
-            sys.exit(1)
+    # Check for --test flag at the end
+    if args and args[-1] == "--test":
+        test_mode = True
+        args = args[:-1]  # Remove --test from args
 
-    # Check if API key provided
-    if not api_key:
-        print("Error: No API key provided. Use --api-key parameter.")
+    # Validate arguments
+    if len(args) < 2:
+        print("Error: Missing required arguments")
+        print("Usage: consult7 <provider> <api-key> [--test]")
+        print()
+        print("Providers: openrouter, google, openai")
+        print()
+        print("Examples:")
+        print("  consult7 openrouter sk-or-v1-...")
+        print("  consult7 google AIza...")
+        print("  consult7 openai sk-proj-...")
+        print("  consult7 openrouter sk-or-v1-... --test")
         sys.exit(1)
 
-    # Set default model if not specified
-    if not model:
-        model = DEFAULT_MODELS[provider]
+    if len(args) > 2:
+        print(f"Error: Too many arguments. Expected 2, got {len(args)}")
+        print("Usage: consult7 <provider> <api-key> [--test]")
+        sys.exit(1)
 
-    # Parse context parameter
-    if context_param:
-        # Allow formats like "1M", "2M", "128K", or plain numbers
-        try:
-            if context_param.upper().endswith("M"):
-                model_context_length = int(float(context_param[:-1]) * 1_000_000)
-            elif context_param.upper().endswith("K"):
-                model_context_length = int(float(context_param[:-1]) * 1_000)
-            else:
-                model_context_length = int(context_param)
-        except ValueError:
-            print(
-                f"Error: Invalid context size '{context_param}'. Use formats like '1M', '128K', or '1000000'"
-            )
-            sys.exit(1)
-    else:
-        # Default to 1M tokens
-        model_context_length = 1_000_000
+    # Parse provider and api key
+    provider = args[0]
+    api_key = args[1]
 
-    # For OpenRouter, still try to fetch actual model info
-    import asyncio
+    # Validate provider
+    if provider not in ["openrouter", "google", "openai"]:
+        print(f"Error: Invalid provider '{provider}'")
+        print("Valid providers: openrouter, google, openai")
+        sys.exit(1)
 
-    if provider == "openrouter" and not context_param:
-        model_info = asyncio.run(get_model_info())
-        if model_info and model_info.get("context_length"):
-            model_context_length = model_info.get("context_length")
+    # Create the consultation tool with provider-specific documentation
+    create_consultation_tool()
 
-    if not test_mode:
-        print(f"Model context window: {model_context_length:,} tokens")
+    # Show model examples for the provider
+    print("Starting Consult7 MCP Server")
+    print(f"Provider: {provider}")
+    print("API Key: Set")
+
+    examples = MODEL_EXAMPLES.get(provider, [])
+    if examples:
+        print(f"\nExample models for {provider}:")
+        for example in examples:
+            print(f"  - {example}")
+        if provider == "openai":
+            print("  Note: Include context length with | separator")
 
     # Run test mode if requested
     if test_mode:
+        import asyncio
+
         success = asyncio.run(test_api_connection())
         sys.exit(0 if success else 1)
 
     # Normal server mode
-    print("Starting Consult7 MCP Server")
-    print(f"Provider: {provider}")
-    print(f"Model: {model}")
-    print("API Key: Set")
-
     mcp.run()
 
 

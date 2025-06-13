@@ -32,17 +32,38 @@ When working with AI agents that have limited context windows (like Claude with 
 
 ## Installation
 
-For **Claude Code**, simply run:
+### Claude Code
+
+Simply run:
 
 ```bash
-claude mcp add-json --scope user consult7 '{
-    "type": "stdio",
-    "command": "uvx",
-    "args": ["consult7",
-      "--api-key", "your-api-key",
-      "--model", "google/gemini-2.5-pro-preview" ]
-  }' 
+# OpenRouter
+claude mcp add -s user consult7 uvx -- consult7 openrouter your-api-key
+
+# Google AI
+claude mcp add -s user consult7 uvx -- consult7 google your-api-key
+
+# OpenAI
+claude mcp add -s user consult7 uvx -- consult7 openai your-api-key
 ```
+
+### Claude Desktop
+
+Add to your Claude Desktop configuration file:
+
+```json
+{
+  "mcpServers": {
+    "consult7": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["consult7", "openrouter", "your-api-key"]
+    }
+  }
+}
+```
+
+Replace `openrouter` with your provider choice (`google` or `openai`) and `your-api-key` with your actual API key.
 
 No installation required - `uvx` automatically downloads and runs consult7 in an isolated environment.
 
@@ -50,26 +71,28 @@ No installation required - `uvx` automatically downloads and runs consult7 in an
 ## Command Line Options
 
 ```bash
-uvx consult7 --api-key KEY [--provider PROVIDER] [--model MODEL] [--context TOKENS] [--test]
+uvx consult7 <provider> <api-key> [--test]
 ```
 
-- `--api-key`: Required. Your API key for the chosen provider
-- `--provider`: Optional. Choose from `openrouter` (default), `google`, or `openai`
-- `--model`: Optional. Specific model to use (defaults to provider's default)
-- `--context`: Optional. Model context window size (default: 1M). Accepts formats like '2M', '128K', or '1000000'
+- `<provider>`: Required. Choose from `openrouter`, `google`, or `openai`
+- `<api-key>`: Required. Your API key for the chosen provider
 - `--test`: Optional. Test the API connection
+
+The model is specified when calling the tool, not at startup. The server shows example models for your provider on startup.
+
+
 
 ## Testing
 
 ```bash
-# Test OpenRouter (default)
-uvx consult7 --api-key "sk-or-v1-..." --test
+# Test OpenRouter
+uvx consult7 openrouter sk-or-v1-... --test
 
 # Test Google AI
-uvx consult7 --api-key "AIza..." --provider google --test
+uvx consult7 google AIza... --test
 
 # Test OpenAI
-uvx consult7 --api-key "sk-proj-..." --provider openai --test
+uvx consult7 openai sk-proj-... --test
 ```
 
 ## Uninstalling
@@ -77,6 +100,6 @@ uvx consult7 --api-key "sk-proj-..." --provider openai --test
 To remove consult7 from Claude Code (or before reinstalling):
 
 ```bash
-claude mcp remove consult7 --scope user
+claude mcp remove consult7 -s user
 ```
 

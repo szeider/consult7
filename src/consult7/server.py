@@ -4,12 +4,16 @@ import sys
 from pathlib import Path
 from typing import Optional
 import httpx
-from mcp.server.fastmcp import FastMCP
+from mcp.server import Server
+import mcp.server.stdio
+import mcp.types as types
+from mcp.server.models import InitializationOptions
+from mcp.server.lowlevel import NotificationOptions
 
 # Provider-specific imports will be done conditionally
 try:
     from google import genai
-    from google.genai import types
+    from google.genai import types as genai_types
 
     GOOGLE_AVAILABLE = True
 except ImportError:
@@ -66,9 +70,6 @@ MODEL_EXAMPLES = {
 model_context_length = None
 # Token estimation safety buffer (reserve 10% for overhead since estimation already has buffer)
 TOKEN_SAFETY_FACTOR = 0.9
-
-# Initialize MCP server
-mcp = FastMCP("Consult7")
 
 # Global variables for CLI args (will be set in main)
 api_key = None
@@ -434,7 +435,7 @@ async def call_google(
         response = await client.aio.models.generate_content(
             model=model_name,
             contents=f"{system_msg}\n\n{user_msg}",
-            config=types.GenerateContentConfig(
+            config=genai_types.GenerateContentConfig(
                 max_output_tokens=16000, temperature=0.7
             ),
         )
@@ -612,149 +613,57 @@ async def call_openrouter(
         return "", f"Error calling API: {e}"
 
 
-def create_consultation_tool():
-    """Create the consultation tool with provider-specific documentation."""
-    # Get model examples for the configured provider
-    examples = MODEL_EXAMPLES.get(provider, [])
+async def consultation_impl(
+    path: str,
+    pattern: str,
+    query: str,
+    model: str,
+    exclude_pattern: Optional[str] = None,
+) -> str:
+    """Implementation of the consultation tool logic."""
+    # Discover files
+    files, errors = discover_files(path, pattern, exclude_pattern)
 
-    # Build model parameter description
-    if provider == "openai":
-        model_desc = f"model: The model to use with {provider.title()} (include context length with | separator). Examples:\n"
-    else:
-        model_desc = f"model: The model to use with {provider.title()}. Examples:\n"
+    if not files and errors:
+        return "Error: No files found. Errors:\n" + "\n".join(errors)
 
-    for example in examples:
-        model_desc += f"               - {example}\n"
-    model_desc = model_desc.rstrip()  # Remove trailing newline
+    # Provide immediate feedback about what was found
+    if not files:
+        return f"No files matched pattern '{pattern}' in path '{path}'"
 
-    # Build provider-specific notes
-    if provider == "openai":
-        provider_notes = f'- {provider.title()} requires context length specification with | separator: "model-name|128k" or "model-name|200000"'
-    else:
-        provider_notes = (
-            f"- {provider.title()} model context windows are auto-detected from the API"
-        )
+    # Format content
+    content, total_size = format_content(path, files, errors)
 
-    # Get example models for the Examples section
-    # Extract just the model name without attributes
-    if examples:
-        # Split on the closing quote to get just the model name
-        example1 = examples[0].split('"')[1] if '"' in examples[0] else "model-name"
-        example2 = examples[1].split('"')[1] if len(examples) > 1 and '"' in examples[1] else example1
-    else:
-        example1 = "model-name"
-        example2 = example1
+    # Add size information to help the agent
+    size_info = f"\n\n[File collection summary: {len(files)} files, {total_size:,} bytes used of {MAX_TOTAL_SIZE:,} bytes available ({(total_size / MAX_TOTAL_SIZE) * 100:.1f}% utilized)]"
 
-    # Build the docstring
-    docstring = f"""
-    Consult an LLM about code files matching a pattern in a directory.
+    # Get model context info to display
+    try:
+        model_info = await get_model_context_info(model)
+        model_context_length = model_info.get("context_length", 128000)
+    except ValueError as e:
+        return f"Error: {str(e)}"
 
-    This tool collects all files matching a regex pattern from a directory tree,
-    formats them into a structured document, and sends them to an LLM along with
-    your query. The LLM analyzes the code and returns insights.
+    # Estimate tokens
+    full_content = content + size_info
+    estimated_tokens = estimate_tokens(full_content)
+    token_info = f"\nEstimated tokens: ~{estimated_tokens:,}"
+    if model_context_length:
+        token_info += f" (Model limit: {model_context_length:,} tokens)"
 
-    Args:
-        path: Absolute filesystem path to search from (e.g., "/Users/john/myproject")
-        pattern: Regex to match filenames. Common patterns:
-                 - ".*\\.py$" for all Python files
-                 - ".*\\.(js|ts)$" for JavaScript/TypeScript files
-                 - ".*test.*\\.py$" for Python test files
-                 - "README.*" for README files
-        query: Your question about the code. Examples:
-               - "Which functions handle authentication?"
-               - "Find all database queries"
-               - "Explain the error handling strategy"
-               - "List all API endpoints"
-        {model_desc}
-        exclude_pattern: Optional regex to exclude files (e.g., ".*test.*" to skip tests)
+    # Call appropriate LLM based on provider
+    if provider == "google":
+        response, error = await call_google(content + size_info, query, model)
+    elif provider == "openai":
+        response, error = await call_openai(content + size_info, query, model)
+    else:  # openrouter (default)
+        response, error = await call_openrouter(content + size_info, query, model)
 
-    Returns:
-        The LLM's analysis of your code based on the query
+    if error:
+        return f"Error calling {provider} LLM: {error}\n\nCollected {len(files)} files ({total_size:,} bytes){token_info}"
 
-    Example:
-        # Analyze Python authentication code, excluding tests
-        consultation(
-            path="/Users/john/backend",
-            pattern=".*\\.py$",
-            query="How is user authentication implemented? What security measures are in place?",
-            model="{example1}",
-            exclude_pattern=".*test.*\\.py$"
-        )
-
-        # Find all API endpoints in a Node.js project
-        consultation(
-            path="/home/dev/api-server",
-            pattern=".*\\.(js|ts)$",
-            query="List all REST API endpoints with their HTTP methods and authentication requirements",
-            model="{example2}",
-            exclude_pattern="node_modules/.*"
-        )
-
-    Notes:
-        - Automatically ignores: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules
-        - File size limit: 10MB per file, 100MB total (optimized for large context models)
-        - Large files are skipped with an error message
-        - Includes detailed errors for debugging (permissions, missing paths, etc.)
-        {provider_notes}
-    """
-
-    # Define the function WITHOUT the decorator first
-    async def consultation(
-        path: str,
-        pattern: str,
-        query: str,
-        model: str,
-        exclude_pattern: Optional[str] = None,
-    ) -> str:
-        # Discover files
-        files, errors = discover_files(path, pattern, exclude_pattern)
-
-        if not files and errors:
-            return "Error: No files found. Errors:\n" + "\n".join(errors)
-
-        # Provide immediate feedback about what was found
-        if not files:
-            return f"No files matched pattern '{pattern}' in path '{path}'"
-
-        # Format content
-        content, total_size = format_content(path, files, errors)
-
-        # Add size information to help the agent
-        size_info = f"\n\n[File collection summary: {len(files)} files, {total_size:,} bytes used of {MAX_TOTAL_SIZE:,} bytes available ({(total_size / MAX_TOTAL_SIZE) * 100:.1f}% utilized)]"
-
-        # Get model context info to display
-        try:
-            model_info = await get_model_context_info(model)
-            model_context_length = model_info.get("context_length", 128000)
-        except ValueError as e:
-            return f"Error: {str(e)}"
-
-        # Estimate tokens
-        full_content = content + size_info
-        estimated_tokens = estimate_tokens(full_content)
-        token_info = f"\nEstimated tokens: ~{estimated_tokens:,}"
-        if model_context_length:
-            token_info += f" (Model limit: {model_context_length:,} tokens)"
-
-        # Call appropriate LLM based on provider
-        if provider == "google":
-            response, error = await call_google(content + size_info, query, model)
-        elif provider == "openai":
-            response, error = await call_openai(content + size_info, query, model)
-        else:  # openrouter (default)
-            response, error = await call_openrouter(content + size_info, query, model)
-
-        if error:
-            return f"Error calling {provider} LLM: {error}\n\nCollected {len(files)} files ({total_size:,} bytes){token_info}"
-
-        # Add size info to response for agent awareness
-        return f"{response}\n\n---\nProcessed {len(files)} files ({total_size:,} bytes) with {model} ({provider}){token_info}"
-
-    # Set the docstring BEFORE applying the decorator
-    consultation.__doc__ = docstring
-
-    # Apply the decorator manually and return the decorated function
-    return mcp.tool()(consultation)
+    # Add size info to response for agent awareness
+    return f"{response}\n\n---\nProcessed {len(files)} files ({total_size:,} bytes) with {model} ({provider}){token_info}"
 
 
 async def test_api_connection():
@@ -796,7 +705,7 @@ async def test_api_connection():
     return True
 
 
-def main():
+async def main():
     """Parse command line arguments and run the server."""
     global api_key, provider
 
@@ -838,8 +747,91 @@ def main():
         print("Valid providers: openrouter, google, openai")
         sys.exit(1)
 
-    # Create the consultation tool with provider-specific documentation
-    create_consultation_tool()
+    # Create server
+    server = Server("consult7")
+
+    @server.list_tools()
+    async def list_tools() -> list[types.Tool]:
+        """List available tools with provider-specific model examples."""
+
+        # Get provider-specific examples
+        examples = MODEL_EXAMPLES.get(provider, [])
+
+        # Build model parameter description
+        if provider == "openai":
+            model_desc = f"The model to use with {provider.title()} (include context length with | separator). Examples: "
+        else:
+            model_desc = f"The model to use with {provider.title()}. Examples: "
+
+        for i, example in enumerate(examples):
+            if i > 0:
+                model_desc += ", "
+            model_desc += example
+
+        # Build tool description with provider-specific notes
+        if provider == "openai":
+            provider_notes = f'Note: {provider.title()} requires context length specification with | separator: "model-name|128k" or "model-name|200000"'
+        else:
+            provider_notes = f"Note: {provider.title()} model context windows are auto-detected from the API"
+
+        tool_description = f"""Consult an LLM about code files matching a pattern in a directory.
+
+This tool collects all files matching a regex pattern from a directory tree,
+formats them into a structured document, and sends them to an LLM along with
+your query. The LLM analyzes the code and returns insights.
+
+{provider_notes}
+
+Notes:
+- Automatically ignores: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules
+- File size limit: 10MB per file, 100MB total (optimized for large context models)
+- Large files are skipped with an error message
+- Includes detailed errors for debugging (permissions, missing paths, etc.)"""
+
+        return [
+            types.Tool(
+                name="consultation",
+                description=tool_description,
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute filesystem path to search from (e.g., /Users/john/myproject)",
+                        },
+                        "pattern": {
+                            "type": "string",
+                            "description": 'Regex to match filenames. Common patterns: ".*\\.py$" for Python files, ".*\\.(js|ts)$" for JavaScript/TypeScript',
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "Your question about the code (e.g., 'Which functions handle authentication?')",
+                        },
+                        "model": {"type": "string", "description": model_desc},
+                        "exclude_pattern": {
+                            "type": "string",
+                            "description": 'Optional regex to exclude files (e.g., ".*test.*" to skip tests)',
+                        },
+                    },
+                    "required": ["path", "pattern", "query", "model"],
+                },
+            )
+        ]
+
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+        """Handle tool calls."""
+        if name == "consultation":
+            result = await consultation_impl(
+                arguments["path"],
+                arguments["pattern"],
+                arguments["query"],
+                arguments["model"],
+                arguments.get("exclude_pattern"),
+            )
+            return [types.TextContent(type="text", text=result)]
+        else:
+            raise ValueError(f"Unknown tool: {name}")
 
     # Show model examples for the provider
     print("Starting Consult7 MCP Server")
@@ -856,14 +848,31 @@ def main():
 
     # Run test mode if requested
     if test_mode:
-        import asyncio
-
-        success = asyncio.run(test_api_connection())
+        success = await test_api_connection()
         sys.exit(0 if success else 1)
 
     # Normal server mode
-    mcp.run()
+    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            InitializationOptions(
+                server_name="consult7",
+                server_version="1.1.1",
+                capabilities=server.get_capabilities(
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={},
+                ),
+            ),
+        )
+
+
+def run():
+    """Entry point for the consult7 command."""
+    import asyncio
+
+    asyncio.run(main())
 
 
 if __name__ == "__main__":
-    main()
+    run()

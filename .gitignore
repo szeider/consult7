@@ -74,8 +74,13 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
+# Hidden files/folders
+.*
+
 # Project specific
 CLAUDE.md
 local/
 secrets.py
 *.log
+uv.lock
+tests/

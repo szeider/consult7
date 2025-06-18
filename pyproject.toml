@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consult7"
-version = "1.1.1"
+version = "1.2.0"
 description = "MCP server for consulting large context window models to analyze extensive file collections"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,10 +14,10 @@ authors = [
 ]
 keywords = ["mcp", "llm", "code-analysis", "large-context"]
 dependencies = [
-    "mcp",
-    "httpx",
-    "google-genai",
-    "openai",
+    "mcp>=1.9.4",
+    "httpx>=0.28.1",
+    "google-genai>=1.19.0",
+    "openai>=1.88.0",
 ]
 
 [project.urls]

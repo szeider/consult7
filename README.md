@@ -30,6 +30,12 @@ When working with AI agents that have limited context windows (like Claude with 
 * **Pattern:** `".*test.*\.py$|.*_test\.py$"` (test files)
 * **Path:** `/Users/john/project`
 
+### Complex analysis with thinking mode
+* **Query:** "Analyze the authentication flow across this codebase. Think step by step about security vulnerabilities and suggest improvements"
+* **Pattern:** `".*\.(py|js|ts)$"`
+* **Model:** `"google/gemini-2.5-flash|thinking"` (with OpenRouter) or `"gemini-2.5-flash|thinking"` (with Google)
+* **Path:** `/Users/john/webapp`
+
 ## Installation
 
 ### Claude Code
@@ -79,6 +85,13 @@ uvx consult7 <provider> <api-key> [--test]
 - `--test`: Optional. Test the API connection
 
 The model is specified when calling the tool, not at startup. The server shows example models for your provider on startup.
+
+### Thinking Mode
+
+Enable advanced reasoning/thinking modes by adding the `|thinking` suffix to supported models:
+
+- **OpenRouter**: `"google/gemini-2.5-flash|thinking"` - Enables reasoning mode with high effort
+- **Google**: `"gemini-2.5-flash|thinking"` - Enables thinking mode with dynamic budget
 
 
 

@@ -42,28 +42,107 @@ DEFAULT_IGNORED = [
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODELS_URL = "https://openrouter.ai/api/v1/models"
 
+
 # ==============================================================================
-# MODEL EXAMPLES - Update these when new models become available
+# TOOL DESCRIPTIONS - Centralized class for managing tool descriptions
 # ==============================================================================
-MODEL_EXAMPLES = {
-    "openrouter": [
-        '"google/gemini-2.5-pro-preview" (intelligent, 1M context)',
-        '"google/gemini-2.5-flash-preview-05-20" (fast, 1M context)',
-        '"google/gemini-2.5-flash-preview-05-20:thinking" (reasoning, 1M context)',
-        '"anthropic/claude-opus-4" (very intelligent, 200k context)',
-    ],
-    "google": [
-        '"gemini-2.5-flash-preview-05-20" (fast, 1M context)',
-        '"gemini-2.5-pro-preview-06-05" (intelligent, 1M context)',
-        '"gemini-2.0-flash-thinking-exp-01-21" (reasoning, 32k context)',
-    ],
-    "openai": [
-        '"o4-mini-2025-04-16|200k" (intelligent, reasoning)',
-        '"o3-2025-04-16|200k" (very intelligent, reasoning)',
-        '"gpt-4.1-2025-04-14|1047576" (fast, huge context)',
-        '"gpt-4.1-nano-2025-04-14|1047576" (very fast, huge context)',
-    ],
-}
+class ToolDescriptions:
+    """Centralized management of tool descriptions and model examples."""
+
+    MODEL_EXAMPLES = {
+        "openrouter": [
+            '"google/gemini-2.5-pro" (intelligent, 1M context)',
+            '"google/gemini-2.5-flash" (fast, 1M context)',
+            '"google/gemini-2.5-pro|thinking" (intelligent with reasoning, 1M context)',
+            '"google/gemini-2.5-flash|thinking" (fast with reasoning, 1M context)',
+        ],
+        "google": [
+            '"gemini-2.5-pro" (intelligent, 1M context)',
+            '"gemini-2.5-flash" (fast, 1M context)',
+            '"gemini-2.5-pro|thinking" (intelligent with thinking, 1M context)',
+            '"gemini-2.5-flash|thinking" (fast with thinking, 1M context)',
+        ],
+        "openai": [
+            '"o4-mini-2025-04-16|200k" (intelligent, reasoning)',
+            '"o3-2025-04-16|200k" (very intelligent, reasoning)',
+            '"gpt-4.1-2025-04-14|1047576" (fast, huge context)',
+            '"gpt-4.1-nano-2025-04-14|1047576" (very fast, huge context)',
+        ],
+    }
+
+    @classmethod
+    def get_consultation_tool_description(cls, provider: str) -> str:
+        """Get the main description for the consultation tool."""
+        provider_notes = cls._get_provider_notes(provider)
+
+        return f"""Consult an LLM about code files matching a pattern in a directory.
+
+This tool collects all files matching a regex pattern from a directory tree,
+formats them into a structured document, and sends them to an LLM along with
+your query. The LLM analyzes the code and returns insights.
+
+{provider_notes}
+
+Notes:
+- Automatically ignores: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules
+- File size limit: 10MB per file, 100MB total (optimized for large context models)
+- Large files are skipped with an error message
+- Includes detailed errors for debugging (permissions, missing paths, etc.)"""
+
+    @classmethod
+    def get_model_parameter_description(cls, provider: str) -> str:
+        """Get the model parameter description with provider-specific examples."""
+        examples = cls.MODEL_EXAMPLES.get(provider, [])
+
+        if provider == "openai":
+            model_desc = (
+                "The model to use. Include context length with | separator. Examples:"
+            )
+        elif provider in ["google", "openrouter"]:
+            suffix_type = "thinking" if provider == "google" else "reasoning"
+            model_desc = f"The model to use. Add |thinking suffix for {suffix_type} mode. Examples:"
+        else:
+            model_desc = "The model to use. Examples:"
+
+        # Add examples on new lines
+        for example in examples:
+            model_desc += f"\n  {example}"
+
+        return model_desc
+
+    @classmethod
+    def get_path_description(cls) -> str:
+        """Get the path parameter description."""
+        return "Absolute filesystem path to search from (e.g., /Users/john/myproject)"
+
+    @classmethod
+    def get_pattern_description(cls) -> str:
+        """Get the pattern parameter description."""
+        return 'Regex to match filenames. Common patterns: ".*\\.py$" for Python files, ".*\\.(js|ts)$" for JavaScript/TypeScript'
+
+    @classmethod
+    def get_query_description(cls) -> str:
+        """Get the query parameter description."""
+        return "Your question about the code (e.g., 'Which functions handle authentication?')"
+
+    @classmethod
+    def get_exclude_pattern_description(cls) -> str:
+        """Get the exclude_pattern parameter description."""
+        return 'Optional regex to exclude files (e.g., ".*test.*" to skip tests)'
+
+    @classmethod
+    def _get_provider_notes(cls, provider: str) -> str:
+        """Get provider-specific notes."""
+        if provider == "openai":
+            return 'Note: Requires context length specification with | separator: "model-name|128k" or "model-name|200000"'
+        elif provider == "google":
+            return 'Note: Model context windows are auto-detected from the API. Add |thinking suffix to enable thinking mode (e.g., "gemini-2.5-flash|thinking")'
+        elif provider == "openrouter":
+            return 'Note: Model context windows are auto-detected from the API. Add |thinking suffix to enable reasoning mode (e.g., "google/gemini-2.5-flash|thinking")'
+        else:
+            return "Note: Model context windows are auto-detected from the API"
+
+
 # ==============================================================================
 
 # Model context limits (updated dynamically)
@@ -402,9 +481,16 @@ async def call_google(
     if not api_key:
         return "", "No API key provided. Use --api-key flag"
 
+    # Parse |thinking suffix
+    thinking_mode = False
+    actual_model = model_name
+    if "|thinking" in model_name:
+        actual_model = model_name.replace("|thinking", "")
+        thinking_mode = True
+
     # Get model context info
     try:
-        model_info = await get_model_context_info(model_name)
+        model_info = await get_model_context_info(actual_model)
         context_length = model_info.get("context_length", 128000)
     except ValueError as e:
         return "", str(e)
@@ -432,12 +518,19 @@ async def call_google(
     try:
         client = genai.Client(api_key=api_key)
 
+        # Build config
+        config_params = {"max_output_tokens": 16000, "temperature": 0.7}
+
+        # Add thinking config if |thinking suffix was used
+        if thinking_mode:
+            config_params["thinking_config"] = genai_types.ThinkingConfig(
+                thinking_budget=-1  # Dynamic thinking
+            )
+
         response = await client.aio.models.generate_content(
-            model=model_name,
+            model=actual_model,
             contents=f"{system_msg}\n\n{user_msg}",
-            config=genai_types.GenerateContentConfig(
-                max_output_tokens=16000, temperature=0.7
-            ),
+            config=genai_types.GenerateContentConfig(**config_params),
         )
 
         llm_response = response.text
@@ -536,9 +629,16 @@ async def call_openrouter(
     if not api_key:
         return "", "No API key provided. Use --api-key flag"
 
+    # Parse |thinking suffix
+    reasoning_mode = False
+    actual_model = model_name
+    if "|thinking" in model_name:
+        actual_model = model_name.replace("|thinking", "")
+        reasoning_mode = True
+
     # Get model context info
     try:
-        model_info = await get_model_context_info(model_name)
+        model_info = await get_model_context_info(actual_model)
         context_length = model_info.get("context_length", 128000)
     except ValueError as e:
         return "", str(e)
@@ -576,11 +676,15 @@ async def call_openrouter(
     ]
 
     data = {
-        "model": model_name,
+        "model": actual_model,
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": max_output_tokens,
     }
+
+    # Add reasoning mode if |thinking suffix was used
+    if reasoning_mode:
+        data["reasoning"] = {"effort": "high"}
 
     try:
         async with httpx.AsyncClient() as client:
@@ -753,64 +857,36 @@ async def main():
     @server.list_tools()
     async def list_tools() -> list[types.Tool]:
         """List available tools with provider-specific model examples."""
-
-        # Get provider-specific examples
-        examples = MODEL_EXAMPLES.get(provider, [])
-
-        # Build model parameter description
-        if provider == "openai":
-            model_desc = f"The model to use with {provider.title()} (include context length with | separator). Examples: "
-        else:
-            model_desc = f"The model to use with {provider.title()}. Examples: "
-
-        for i, example in enumerate(examples):
-            if i > 0:
-                model_desc += ", "
-            model_desc += example
-
-        # Build tool description with provider-specific notes
-        if provider == "openai":
-            provider_notes = f'Note: {provider.title()} requires context length specification with | separator: "model-name|128k" or "model-name|200000"'
-        else:
-            provider_notes = f"Note: {provider.title()} model context windows are auto-detected from the API"
-
-        tool_description = f"""Consult an LLM about code files matching a pattern in a directory.
-
-This tool collects all files matching a regex pattern from a directory tree,
-formats them into a structured document, and sends them to an LLM along with
-your query. The LLM analyzes the code and returns insights.
-
-{provider_notes}
-
-Notes:
-- Automatically ignores: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules
-- File size limit: 10MB per file, 100MB total (optimized for large context models)
-- Large files are skipped with an error message
-- Includes detailed errors for debugging (permissions, missing paths, etc.)"""
-
         return [
             types.Tool(
                 name="consultation",
-                description=tool_description,
+                description=ToolDescriptions.get_consultation_tool_description(
+                    provider
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "path": {
                             "type": "string",
-                            "description": "Absolute filesystem path to search from (e.g., /Users/john/myproject)",
+                            "description": ToolDescriptions.get_path_description(),
                         },
                         "pattern": {
                             "type": "string",
-                            "description": 'Regex to match filenames. Common patterns: ".*\\.py$" for Python files, ".*\\.(js|ts)$" for JavaScript/TypeScript',
+                            "description": ToolDescriptions.get_pattern_description(),
                         },
                         "query": {
                             "type": "string",
-                            "description": "Your question about the code (e.g., 'Which functions handle authentication?')",
+                            "description": ToolDescriptions.get_query_description(),
                         },
-                        "model": {"type": "string", "description": model_desc},
+                        "model": {
+                            "type": "string",
+                            "description": ToolDescriptions.get_model_parameter_description(
+                                provider
+                            ),
+                        },
                         "exclude_pattern": {
                             "type": "string",
-                            "description": 'Optional regex to exclude files (e.g., ".*test.*" to skip tests)',
+                            "description": ToolDescriptions.get_exclude_pattern_description(),
                         },
                     },
                     "required": ["path", "pattern", "query", "model"],
@@ -838,7 +914,7 @@ Notes:
     print(f"Provider: {provider}")
     print("API Key: Set")
 
-    examples = MODEL_EXAMPLES.get(provider, [])
+    examples = ToolDescriptions.MODEL_EXAMPLES.get(provider, [])
     if examples:
         print(f"\nExample models for {provider}:")
         for example in examples:
@@ -858,7 +934,7 @@ Notes:
             write_stream,
             InitializationOptions(
                 server_name="consult7",
-                server_version="1.1.1",
+                server_version="1.2.0",
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},

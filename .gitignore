@@ -84,3 +84,7 @@ secrets.py
 *.log
 uv.lock
 tests/
+test_files/
+# API Keys - NEVER commit these
+api-keys.txt
+**/api-keys.txt

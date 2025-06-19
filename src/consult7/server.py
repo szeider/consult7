@@ -1,3 +1,5 @@
+"""Consult7 MCP server - Analyze large file collections with AI models."""
+
 import os
 import re
 import sys
@@ -42,6 +44,68 @@ DEFAULT_IGNORED = [
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODELS_URL = "https://openrouter.ai/api/v1/models"
 
+# Token and model constants
+TOKEN_SAFETY_FACTOR = 0.9  # Safety buffer for token calculations
+DEFAULT_OUTPUT_TOKENS = 8_000  # Default max output tokens (~300 lines of code)
+SMALL_OUTPUT_TOKENS = 4_000  # Output tokens for smaller models
+SMALL_MODEL_THRESHOLD = 100_000  # Context size threshold for small models
+
+# Thinking/reasoning constants
+MIN_THINKING_TOKENS = 500  # Minimum tokens needed for meaningful thinking
+MIN_REASONING_TOKENS = 1_024  # OpenRouter minimum reasoning requirement
+MAX_REASONING_TOKENS = (
+    31_999  # OpenRouter maximum reasoning cap (actual limit for Anthropic)
+)
+FLASH_MAX_THINKING_TOKENS = 24_576  # Google Flash model thinking limit
+PRO_MAX_THINKING_TOKENS = 32_768  # Google Pro model thinking limit
+
+# Token estimation constants
+CHARS_PER_TOKEN_REGULAR = 3.2  # Characters per token for regular text/code
+CHARS_PER_TOKEN_HTML = 2.5  # Characters per token for HTML/XML
+TOKEN_ESTIMATION_BUFFER = 1.1  # 10% buffer for token estimation
+
+# API constants
+DEFAULT_TEMPERATURE = 0.7  # Default temperature for all providers
+OPENROUTER_TIMEOUT = 30.0  # Timeout for OpenRouter API calls
+API_FETCH_TIMEOUT = 10.0  # Timeout for fetching model info
+DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
+
+# Application constants
+SERVER_VERSION = "1.2.1"
+EXIT_SUCCESS = 0
+EXIT_FAILURE = 1
+MIN_ARGS = 2
+
+# Test models for each provider
+TEST_MODELS = {
+    "openrouter": "google/gemini-2.5-flash-preview-05-20",
+    "google": "gemini-2.0-flash-exp",
+    "openai": "gpt-4o-mini|128k",
+}
+
+# Thinking/Reasoning Token Limits by Model
+# Easy to update: just add new models here
+THINKING_LIMITS = {
+    # Google models
+    "gemini-2.0-flash-exp": 32_768,
+    "gemini-2.0-flash-thinking-exp": 32_768,
+    "gemini-2.0-flash-thinking-exp-01-21": 32_768,
+    "gemini-2.5-flash": 24_576,
+    "gemini-2.5-flash-latest": 24_576,
+    "gemini-2.5-pro": 32_768,
+    "gemini-2.5-pro-latest": 32_768,
+    # OpenRouter models
+    "google/gemini-2.5-flash": 24_576,
+    "google/gemini-2.5-pro": 32_768,
+    "anthropic/claude-opus-4": 31_999,  # Actual limit is 31,999, not 32,000
+    "anthropic/claude-sonnet-4": 31_999,  # Using same limit for consistency
+    # OpenAI models - special marker for effort-based handling
+    "openai/gpt-4.1": "effort",
+    "openai/gpt-4.1-mini": "effort",
+    "openai/gpt-4.1-nano": "effort",
+    "openai/o1": "effort",
+}
+
 
 # ==============================================================================
 # TOOL DESCRIPTIONS - Centralized class for managing tool descriptions
@@ -53,20 +117,25 @@ class ToolDescriptions:
         "openrouter": [
             '"google/gemini-2.5-pro" (intelligent, 1M context)',
             '"google/gemini-2.5-flash" (fast, 1M context)',
-            '"google/gemini-2.5-pro|thinking" (intelligent with reasoning, 1M context)',
-            '"google/gemini-2.5-flash|thinking" (fast with reasoning, 1M context)',
+            '"anthropic/claude-sonnet-4" (Claude Sonnet, 200k context)',
+            '"openai/gpt-4.1" (GPT-4.1, 1M+ context)',
+            '"anthropic/claude-sonnet-4|thinking" (Claude with 31,999 tokens)',
+            '"openai/gpt-4.1|thinking" (GPT-4.1 with reasoning effort=high)',
         ],
         "google": [
-            '"gemini-2.5-pro" (intelligent, 1M context)',
-            '"gemini-2.5-flash" (fast, 1M context)',
-            '"gemini-2.5-pro|thinking" (intelligent with thinking, 1M context)',
-            '"gemini-2.5-flash|thinking" (fast with thinking, 1M context)',
+            '"gemini-2.5-flash" (fast, standard mode)',
+            '"gemini-2.5-pro" (intelligent, standard mode)',
+            '"gemini-2.0-flash-exp" (experimental model)',
+            '"gemini-2.5-flash|thinking" (fast with deep reasoning)',
+            '"gemini-2.5-pro|thinking" (intelligent with deep reasoning)',
         ],
         "openai": [
-            '"o4-mini-2025-04-16|200k" (intelligent, reasoning)',
-            '"o3-2025-04-16|200k" (very intelligent, reasoning)',
-            '"gpt-4.1-2025-04-14|1047576" (fast, huge context)',
-            '"gpt-4.1-nano-2025-04-14|1047576" (very fast, huge context)',
+            '"gpt-4.1-2025-04-14|1047576" (1M+ context, very fast)',
+            '"gpt-4.1-nano-2025-04-14|1047576" (1M+ context, ultra fast)',
+            '"o3-2025-04-16|200k" (advanced reasoning model)',
+            '"o4-mini-2025-04-16|200k" (fast reasoning model)',
+            '"o1-mini|128k|thinking" (mini reasoning with |thinking marker)',
+            '"o3-2025-04-16|200k|thinking" (advanced reasoning with |thinking marker)',
         ],
     }
 
@@ -95,17 +164,22 @@ Notes:
         examples = cls.MODEL_EXAMPLES.get(provider, [])
 
         if provider == "openai":
-            model_desc = (
-                "The model to use. Include context length with | separator. Examples:"
-            )
-        elif provider in ["google", "openrouter"]:
-            suffix_type = "thinking" if provider == "google" else "reasoning"
-            model_desc = f"The model to use. Add |thinking suffix for {suffix_type} mode. Examples:"
+            model_desc = ('The model to use. Include context length with | '
+                         'separator (e.g., "model-name|200k").\nExamples:')
         else:
             model_desc = "The model to use. Examples:"
 
-        # Add examples on new lines
-        for example in examples:
+        # Add examples on new lines, but check where to add |thinking note
+        thinking_examples_start = -1
+        for i, example in enumerate(examples):
+            if "|thinking" in example and thinking_examples_start == -1:
+                thinking_examples_start = i
+                # Add the |thinking note before the first thinking example
+                if provider in ["google", "openrouter"]:
+                    suffix_type = "thinking" if provider == "google" else "reasoning"
+                    model_desc += f"\n\nAdd |thinking suffix for {suffix_type} mode:"
+                elif provider == "openai":
+                    model_desc += "\n\n|thinking suffix (o-series models only):"
             model_desc += f"\n  {example}"
 
         return model_desc
@@ -118,7 +192,8 @@ Notes:
     @classmethod
     def get_pattern_description(cls) -> str:
         """Get the pattern parameter description."""
-        return 'Regex to match filenames. Common patterns: ".*\\.py$" for Python files, ".*\\.(js|ts)$" for JavaScript/TypeScript'
+        return ('Regex to match filenames. Common patterns: ".*\\.py$" for '
+                'Python files, ".*\\.(js|ts)$" for JavaScript/TypeScript')
 
     @classmethod
     def get_query_description(cls) -> str:
@@ -134,11 +209,17 @@ Notes:
     def _get_provider_notes(cls, provider: str) -> str:
         """Get provider-specific notes."""
         if provider == "openai":
-            return 'Note: Requires context length specification with | separator: "model-name|128k" or "model-name|200000"'
+            return ""  # Move note to model parameter description
         elif provider == "google":
-            return 'Note: Model context windows are auto-detected from the API. Add |thinking suffix to enable thinking mode (e.g., "gemini-2.5-flash|thinking")'
+            return (
+                "Thinking Mode: Add |thinking to any model for deep reasoning (e.g., gemini-2.5-flash|thinking).\n"
+                "Advanced: For custom thinking limits, use |thinking=30000"
+            )
         elif provider == "openrouter":
-            return 'Note: Model context windows are auto-detected from the API. Add |thinking suffix to enable reasoning mode (e.g., "google/gemini-2.5-flash|thinking")'
+            return (
+                "Reasoning Mode: Add |thinking suffix to enable deeper analysis.\n"
+                "Advanced: For custom limits, use |thinking=30000"
+            )
         else:
             return "Note: Model context windows are auto-detected from the API"
 
@@ -147,12 +228,81 @@ Notes:
 
 # Model context limits (updated dynamically)
 model_context_length = None
-# Token estimation safety buffer (reserve 10% for overhead since estimation already has buffer)
-TOKEN_SAFETY_FACTOR = 0.9
 
 # Global variables for CLI args (will be set in main)
 api_key = None
 provider = "openrouter"  # default provider
+
+
+def _process_llm_response(response_content: Optional[str]) -> str:
+    """Process LLM response: handle None and truncate if needed."""
+    if response_content is None:
+        response_content = ""
+
+    if len(response_content) > MAX_RESPONSE_SIZE:
+        response_content = (
+            response_content[:MAX_RESPONSE_SIZE]
+            + "\n[TRUNCATED - Response exceeded size limit]"
+        )
+
+    return response_content
+
+
+def _parse_thinking_suffix(model_name: str) -> tuple[str, bool]:
+    """Parse model name and check for |thinking suffix."""
+    if "|thinking" in model_name:
+        return model_name.split("|")[0], True
+    return model_name, False
+
+
+def parse_model_thinking(model_spec: str) -> tuple[str, Optional[int]]:
+    """
+    Parse model|thinking or model|thinking=12345.
+    Returns (model_name, custom_thinking_tokens or None)
+    """
+    if "|thinking" not in model_spec:
+        return model_spec, None
+
+    parts = model_spec.split("|thinking")
+    model_name = parts[0]
+
+    # Check for =value after |thinking
+    if len(parts) > 1 and parts[1].startswith("="):
+        try:
+            custom_tokens = int(parts[1][1:])
+            # Validate the custom value
+            if custom_tokens < 0:
+                return model_name, None  # Negative values disable thinking
+            return model_name, custom_tokens
+        except ValueError:
+            # Invalid number, ignore the override
+            pass
+
+    # Just |thinking without =value
+    return model_name, None
+
+
+def get_thinking_budget(
+    model_name: str, custom_tokens: Optional[int] = None
+) -> Optional[int]:
+    """
+    Get thinking tokens for a model. Returns None if unknown model without override.
+    """
+    if custom_tokens is not None:
+        return custom_tokens
+
+    # Exact match in dictionary
+    if model_name in THINKING_LIMITS:
+        return THINKING_LIMITS[model_name]
+
+    # Try without provider prefix (for OpenRouter models)
+    if "/" in model_name:
+        base_model = model_name.split("/", 1)[1]
+        if base_model in THINKING_LIMITS:
+            return THINKING_LIMITS[base_model]
+
+    # Unknown model without override - return None to disable thinking
+    return None
 
 
 def estimate_tokens(text: str) -> int:
@@ -166,13 +316,13 @@ def estimate_tokens(text: str) -> int:
     # Check if content looks like HTML/XML
     if "<" in text and ">" in text:
         # HTML/XML uses more tokens due to tags
-        base_estimate = len(text) / 2.5
+        base_estimate = len(text) / CHARS_PER_TOKEN_HTML
     else:
         # Regular text/code
-        base_estimate = len(text) / 3.2
+        base_estimate = len(text) / CHARS_PER_TOKEN_REGULAR
 
-    # Add 10% safety buffer
-    return int(base_estimate * 1.1)
+    # Add safety buffer
+    return int(base_estimate * TOKEN_ESTIMATION_BUFFER)
 
 
 def should_ignore_path(path: Path) -> bool:
@@ -385,7 +535,9 @@ async def get_openrouter_model_info(model_name: str) -> Optional[dict]:
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(MODELS_URL, headers=headers, timeout=10.0)
+            response = await client.get(
+                MODELS_URL, headers=headers, timeout=API_FETCH_TIMEOUT
+            )
 
             if response.status_code != 200:
                 print(f"Warning: Could not fetch model info: {response.status_code}")
@@ -396,9 +548,11 @@ async def get_openrouter_model_info(model_name: str) -> Optional[dict]:
                 if model_info.get("id") == model_name:
                     # Return in consistent format
                     return {
-                        "context_length": model_info.get("context_length", 128000),
+                        "context_length": model_info.get(
+                            "context_length", DEFAULT_CONTEXT_LENGTH
+                        ),
                         "max_output_tokens": model_info.get(
-                            "max_completion_tokens", 4096
+                            "max_completion_tokens", SMALL_OUTPUT_TOKENS
                         ),
                         "provider": "openrouter",
                         "pricing": model_info.get("pricing"),
@@ -424,12 +578,18 @@ async def get_model_context_info(model_name: str) -> Optional[dict]:
         specified_context = None
 
         if provider == "openai" and "|" in model_name:
-            actual_model_name, context_str = model_name.split("|", 1)
-            # Parse context like "200k" -> 200000, "1047576" -> 1047576
-            if context_str.endswith("k"):
-                specified_context = int(float(context_str[:-1]) * 1000)
-            else:
-                specified_context = int(context_str)
+            parts = model_name.split("|")
+            actual_model_name = parts[0]
+
+            # Check if we have context specification
+            # It should be in parts[1] and not be "thinking"
+            if len(parts) >= 2 and parts[1] and parts[1] != "thinking":
+                context_str = parts[1]
+                # Parse context like "200k" -> 200000, "1047576" -> 1047576
+                if context_str.endswith("k"):
+                    specified_context = int(float(context_str[:-1]) * 1000)
+                else:
+                    specified_context = int(context_str)
 
         # Get model info based on provider
         if provider == "google":
@@ -442,7 +602,7 @@ async def get_model_context_info(model_name: str) -> Optional[dict]:
                 )
             info = {
                 "context_length": specified_context,
-                "max_output_tokens": 16384,  # OpenAI models typically support this
+                "max_output_tokens": DEFAULT_OUTPUT_TOKENS,  # Use our standard output allocation
                 "provider": "openai",
             }
         else:  # openrouter
@@ -456,44 +616,45 @@ async def get_model_context_info(model_name: str) -> Optional[dict]:
         print(
             f"Warning: Could not determine context length for {model_name}, using default of 128k tokens"
         )
-        model_context_length = 128000
-        return {"context_length": 128000, "provider": provider}
+        model_context_length = DEFAULT_CONTEXT_LENGTH
+        return {"context_length": DEFAULT_CONTEXT_LENGTH, "provider": provider}
 
     except ValueError:
         # Re-raise ValueError to be caught by caller
         raise
     except Exception as e:
         print(f"Error getting model info: {e}")
-        model_context_length = 128000
-        return {"context_length": 128000, "provider": provider}
+        model_context_length = DEFAULT_CONTEXT_LENGTH
+        return {"context_length": DEFAULT_CONTEXT_LENGTH, "provider": provider}
 
 
 async def call_google(
     content: str, query: str, model_name: str
-) -> tuple[str, Optional[str]]:
+) -> tuple[str, Optional[str], Optional[int]]:
     """
     Call Google AI API with the content and query.
-    Returns (response, error)
+    Returns (response, error, thinking_budget)
     """
     if not GOOGLE_AVAILABLE:
-        return "", "Google AI SDK not available. Install with: pip install google-genai"
+        return (
+            "",
+            "Google AI SDK not available. Install with: pip install google-genai",
+            None,
+        )
 
     if not api_key:
-        return "", "No API key provided. Use --api-key flag"
+        return "", "No API key provided. Use --api-key flag", None
 
-    # Parse |thinking suffix
-    thinking_mode = False
-    actual_model = model_name
-    if "|thinking" in model_name:
-        actual_model = model_name.replace("|thinking", "")
-        thinking_mode = True
+    # Parse model and thinking override
+    actual_model, custom_thinking = parse_model_thinking(model_name)
+    thinking_mode = custom_thinking is not None or model_name.endswith("|thinking")
 
     # Get model context info
     try:
         model_info = await get_model_context_info(actual_model)
-        context_length = model_info.get("context_length", 128000)
+        context_length = model_info.get("context_length", DEFAULT_CONTEXT_LENGTH)
     except ValueError as e:
-        return "", str(e)
+        return "", str(e), None
 
     # Estimate tokens for the input
     system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
@@ -501,30 +662,89 @@ async def call_google(
     total_input = system_msg + user_msg
     estimated_tokens = estimate_tokens(total_input)
 
-    # Check against model context limit
-    max_output_tokens = model_info.get("max_output_tokens", 65536)
+    # Fixed output token limit
+    max_output_tokens = DEFAULT_OUTPUT_TOKENS
+
+    # Binary approach for thinking mode - reserve full amount upfront
+    thinking_budget = 0
+    unknown_model_msg = ""
+    if thinking_mode:
+        thinking_budget = get_thinking_budget(actual_model, custom_thinking)
+
+        # If unknown model without override, disable thinking and add note
+        if thinking_budget is None:
+            thinking_mode = False
+            thinking_budget = 0
+            unknown_model_msg = f"\nNote: Unknown model '{actual_model}' requires thinking=X parameter for thinking mode. Example: {actual_model}|thinking=30000"
+
+    # Calculate available input space with thinking reserved upfront
     available_for_input = int(
-        (context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
+        (context_length - max_output_tokens - thinking_budget) * TOKEN_SAFETY_FACTOR
     )
 
+    # Check against adjusted limit
     if estimated_tokens > available_for_input:
-        return "", (
-            f"Content too large: ~{estimated_tokens:,} tokens estimated, "
-            f"but model {model_name} has only ~{available_for_input:,} tokens available for input "
-            f"(total limit: {context_length:,}, reserved for output: {max_output_tokens:,}). "
-            f"Try reducing file count/size."
-        )
+        if thinking_mode:
+            # Check if it would fit without thinking
+            available_without_thinking = int(
+                (context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
+            )
+            if estimated_tokens > available_without_thinking:
+                # Too large even without thinking
+                return (
+                    "",
+                    (
+                        f"Content too large for model: ~{estimated_tokens:,} tokens estimated, "
+                        f"but model {actual_model} has only ~{available_without_thinking:,} tokens available "
+                        f"even without thinking mode "
+                        f"(context: {context_length:,}, output: {max_output_tokens:,}). "
+                        f"Try reducing file count/size or using a model with larger context."
+                    ),
+                    0,
+                )
+            else:
+                # Only too large because of thinking
+                return (
+                    "",
+                    (
+                        f"Content too large for thinking mode: ~{estimated_tokens:,} tokens estimated, "
+                        f"but only ~{available_for_input:,} tokens available with thinking "
+                        f"(~{available_without_thinking:,} available without thinking). "
+                        f"Context: {context_length:,}, output: {max_output_tokens:,}, thinking: {thinking_budget:,}. "
+                        f"Try without |thinking suffix."
+                    ),
+                    0,
+                )
+        else:
+            return (
+                "",
+                (
+                    f"Content too large: ~{estimated_tokens:,} tokens estimated, "
+                    f"but model {model_name} has only ~{available_for_input:,} tokens available for input "
+                    f"(total limit: {context_length:,}, reserved for output: {max_output_tokens:,}). "
+                    f"Try reducing file count/size."
+                ),
+                0,
+            )
 
     try:
         client = genai.Client(api_key=api_key)
 
         # Build config
-        config_params = {"max_output_tokens": 16000, "temperature": 0.7}
+        config_params = {
+            "max_output_tokens": max_output_tokens,
+            "temperature": DEFAULT_TEMPERATURE,
+        }
 
         # Add thinking config if |thinking suffix was used
         if thinking_mode:
+            # Google API uses specific values:
+            # -1 = dynamic thinking (model decides)
+            # 0 = disable thinking (for Flash/Flash Lite)
+            # positive = specific budget
+            # For now, we use the full budget when |thinking is specified
             config_params["thinking_config"] = genai_types.ThinkingConfig(
-                thinking_budget=-1  # Dynamic thinking
+                thinking_budget=thinking_budget  # Use calculated budget
             )
 
         response = await client.aio.models.generate_content(
@@ -533,19 +753,21 @@ async def call_google(
             config=genai_types.GenerateContentConfig(**config_params),
         )
 
-        llm_response = response.text
+        llm_response = _process_llm_response(response.text)
 
-        # Truncate if needed
-        if len(llm_response) > MAX_RESPONSE_SIZE:
-            llm_response = (
-                llm_response[:MAX_RESPONSE_SIZE]
-                + "\n[TRUNCATED - Response exceeded size limit]"
-            )
+        # Add unknown model message if applicable
+        if unknown_model_msg:
+            llm_response = llm_response + unknown_model_msg
 
-        return llm_response, None
+        # Return thinking budget (None for normal mode, value for thinking mode)
+        return llm_response, None, thinking_budget if thinking_mode else None
 
     except Exception as e:
-        return "", f"Error calling Google AI: {str(e)}"
+        error_msg = f"Error calling Google AI: {str(e)}"
+        # Add unknown model message if applicable
+        if unknown_model_msg and "not found" in str(e).lower():
+            error_msg += unknown_model_msg
+        return "", error_msg, None
 
 
 async def call_openai(
@@ -561,15 +783,20 @@ async def call_openai(
     if not api_key:
         return "", "No API key provided. Use --api-key flag"
 
+    # Parse model name for thinking mode
+    parts = model_name.split("|") if "|" in model_name else [model_name]
+    actual_model_name = parts[0]
+    has_thinking = "thinking" in parts
+
+    # Check if this is an o-series model that supports reasoning
+    is_reasoning_model = any(x in actual_model_name.lower() for x in ["o1", "o3", "o4"])
+
     # Get model context info (including parsed context from model|context format)
     try:
         model_info = await get_model_context_info(model_name)
         context_length = model_info.get("context_length", 128000)
     except ValueError as e:
         return "", str(e)
-
-    # Extract actual model name (without context specification)
-    actual_model_name = model_name.split("|")[0] if "|" in model_name else model_name
 
     # Estimate tokens for the input
     system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
@@ -578,7 +805,7 @@ async def call_openai(
     estimated_tokens = estimate_tokens(total_input)
 
     # Check against model context limit
-    max_output_tokens = model_info.get("max_output_tokens", 16000)
+    max_output_tokens = model_info.get("max_output_tokens", DEFAULT_OUTPUT_TOKENS)
     available_for_input = int(
         (context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
     )
@@ -594,24 +821,46 @@ async def call_openai(
     try:
         client = AsyncOpenAI(api_key=api_key)
 
-        response = await client.chat.completions.create(
-            model=actual_model_name,
-            messages=[
+        # Build parameters
+        # o-series models don't support system messages
+        if any(x in actual_model_name.lower() for x in ["o1", "o3", "o4"]):
+            messages = [
+                {"role": "user", "content": f"{system_msg}\n\n{user_msg}"},
+            ]
+        else:
+            messages = [
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},
-            ],
-            temperature=0.7,
-            max_tokens=16000,
-        )
+            ]
 
-        llm_response = response.choices[0].message.content
+        # Build base parameters
+        params = {
+            "model": actual_model_name,
+            "messages": messages,
+        }
 
-        # Truncate if needed
-        if len(llm_response) > MAX_RESPONSE_SIZE:
-            llm_response = (
-                llm_response[:MAX_RESPONSE_SIZE]
-                + "\n[TRUNCATED - Response exceeded size limit]"
-            )
+        # o-series models have different parameter requirements
+        if any(x in actual_model_name.lower() for x in ["o1", "o3", "o4"]):
+            params["max_completion_tokens"] = DEFAULT_OUTPUT_TOKENS
+            # o-series models only support temperature=1
+        else:
+            params["max_tokens"] = DEFAULT_OUTPUT_TOKENS
+            params["temperature"] = DEFAULT_TEMPERATURE
+
+        # Note: o-series models automatically use reasoning tokens internally
+        # The API doesn't support reasoning_effort parameter in SDK 1.88.0
+        # But usage stats will show reasoning_tokens in the response
+
+        response = await client.chat.completions.create(**params)
+
+        llm_response = _process_llm_response(response.choices[0].message.content)
+
+        # Add note about thinking mode if used
+        if has_thinking:
+            if is_reasoning_model:
+                llm_response += "\n\n[Note: o-series models use reasoning tokens automatically. The |thinking suffix is informational - use OpenRouter for effort control.]"
+            else:
+                llm_response += f"\n\n[Note: |thinking not supported for {actual_model_name}. Only o-series models support reasoning.]"
 
         return llm_response, None
 
@@ -621,27 +870,24 @@ async def call_openai(
 
 async def call_openrouter(
     content: str, query: str, model_name: str
-) -> tuple[str, Optional[str]]:
+) -> tuple[str, Optional[str], Optional[int]]:
     """
     Call OpenRouter API with the content and query.
-    Returns (response, error)
+    Returns (response, error, reasoning_budget)
     """
     if not api_key:
-        return "", "No API key provided. Use --api-key flag"
+        return "", "No API key provided. Use --api-key flag", None
 
-    # Parse |thinking suffix
-    reasoning_mode = False
-    actual_model = model_name
-    if "|thinking" in model_name:
-        actual_model = model_name.replace("|thinking", "")
-        reasoning_mode = True
+    # Parse model and thinking override
+    actual_model, custom_thinking = parse_model_thinking(model_name)
+    reasoning_mode = custom_thinking is not None or model_name.endswith("|thinking")
 
     # Get model context info
     try:
         model_info = await get_model_context_info(actual_model)
         context_length = model_info.get("context_length", 128000)
     except ValueError as e:
-        return "", str(e)
+        return "", str(e), None
 
     # Estimate tokens for the input
     system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
@@ -649,20 +895,100 @@ async def call_openrouter(
     total_input = system_msg + user_msg
     estimated_tokens = estimate_tokens(total_input)
 
-    # Check against model context limit if known
-    # Reserve tokens for output
-    max_output_tokens = 16000 if context_length > 100000 else 4000
+    # Fixed output token limit for initial calculation
+    base_max_output_tokens = (
+        DEFAULT_OUTPUT_TOKENS
+        if context_length > SMALL_MODEL_THRESHOLD
+        else SMALL_OUTPUT_TOKENS
+    )
+    max_output_tokens = base_max_output_tokens
+
+    # Binary approach for reasoning mode - reserve full amount upfront
+    reasoning_budget = 0
+    unknown_model_msg = ""
+    is_openai_model = any(x in actual_model.lower() for x in ["gpt-4", "o1", "openai"])
+
+    if reasoning_mode:
+        # Check if it's an OpenAI model that uses effort levels
+        limit_value = get_thinking_budget(actual_model, custom_thinking)
+
+        if limit_value == "effort":
+            # OpenAI models use effort levels, not token counts
+            is_openai_model = True
+            # For OpenAI models, reasoning uses part of the output budget
+            # We don't increase max_output_tokens
+            reasoning_budget = 0  # Signal that we're using effort mode
+        else:
+            # Non-OpenAI models: get reasoning budget
+            reasoning_budget = limit_value
+
+            # If unknown model without override, disable reasoning and add note
+            if reasoning_budget is None:
+                reasoning_mode = False
+                reasoning_budget = 0
+                unknown_model_msg = f"\nNote: Unknown model '{actual_model}' requires thinking=X parameter for reasoning mode. Example: {actual_model}|thinking=30000"
+            else:
+                # For Anthropic models, reasoning tokens come FROM max_tokens, not in addition
+                # For other models (Gemini), they're additional
+                if "anthropic" in actual_model.lower():
+                    # Anthropic: ensure max_tokens > reasoning_budget
+                    # We need at least reasoning_budget + some tokens for the actual response
+                    max_output_tokens = (
+                        reasoning_budget + 2000
+                    )  # 2k for actual response
+                else:
+                    # Gemini and others: reasoning is additional to output
+                    max_output_tokens = DEFAULT_OUTPUT_TOKENS + reasoning_budget
+
+    # Calculate available input space with reasoning reserved upfront
     available_for_input = int(
         (context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
     )
 
+    # Check against adjusted limit
     if estimated_tokens > available_for_input:
-        return "", (
-            f"Content too large: ~{estimated_tokens:,} tokens estimated, "
-            f"but model {model_name} has only ~{available_for_input:,} tokens available for input "
-            f"(total limit: {context_length:,}, reserved for output: {max_output_tokens:,}). "
-            f"Try using a model with larger context or reducing file count/size."
-        )
+        if reasoning_mode:
+            # Check if it would fit without reasoning
+            available_without_reasoning = int(
+                (context_length - DEFAULT_OUTPUT_TOKENS) * TOKEN_SAFETY_FACTOR
+            )
+            if estimated_tokens > available_without_reasoning:
+                # Too large even without reasoning
+                return (
+                    "",
+                    (
+                        f"Content too large for model: ~{estimated_tokens:,} tokens estimated, "
+                        f"but model {actual_model} has only ~{available_without_reasoning:,} tokens available "
+                        f"even without reasoning mode "
+                        f"(context: {context_length:,}, output: {DEFAULT_OUTPUT_TOKENS:,}). "
+                        f"Try reducing file count/size or using a model with larger context."
+                    ),
+                    0,
+                )
+            else:
+                # Only too large because of reasoning
+                return (
+                    "",
+                    (
+                        f"Content too large for reasoning mode: ~{estimated_tokens:,} tokens estimated, "
+                        f"but only ~{available_for_input:,} tokens available with reasoning "
+                        f"(~{available_without_reasoning:,} available without reasoning). "
+                        f"Context: {context_length:,}, output: {DEFAULT_OUTPUT_TOKENS:,}, reasoning: {reasoning_budget:,}. "
+                        f"Try without |thinking suffix."
+                    ),
+                    0,
+                )
+        else:
+            return (
+                "",
+                (
+                    f"Content too large: ~{estimated_tokens:,} tokens estimated, "
+                    f"but model {model_name} has only ~{available_for_input:,} tokens available for input "
+                    f"(total limit: {context_length:,}, reserved for output: {max_output_tokens:,}). "
+                    f"Try using a model with larger context or reducing file count/size."
+                ),
+                0,
+            )
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -678,43 +1004,57 @@ async def call_openrouter(
     data = {
         "model": actual_model,
         "messages": messages,
-        "temperature": 0.7,
+        "temperature": DEFAULT_TEMPERATURE,
         "max_tokens": max_output_tokens,
     }
 
     # Add reasoning mode if |thinking suffix was used
     if reasoning_mode:
-        data["reasoning"] = {"effort": "high"}
+        if is_openai_model:
+            # OpenAI models: use effort level
+            data["reasoning"] = {"effort": "high"}
+            # Note: This uses ~80% of the 8k output budget for reasoning
+            # Total context reduction is still just 8k (not additional)
+        else:
+            # Anthropic, Gemini, and others: use max_tokens
+            data["reasoning"] = {"max_tokens": reasoning_budget}
 
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                OPENROUTER_URL, headers=headers, json=data, timeout=30.0
+                OPENROUTER_URL, headers=headers, json=data, timeout=OPENROUTER_TIMEOUT
             )
 
             if response.status_code != 200:
-                return "", f"API error: {response.status_code} - {response.text}"
+                return "", f"API error: {response.status_code} - {response.text}", None
 
             result = response.json()
 
             if "choices" not in result or not result["choices"]:
-                return "", f"Unexpected API response format: {result}"
+                return "", f"Unexpected API response format: {result}", None
 
-            llm_response = result["choices"][0]["message"]["content"]
+            llm_response = _process_llm_response(
+                result["choices"][0]["message"]["content"]
+            )
 
-            # Truncate if needed
-            if len(llm_response) > MAX_RESPONSE_SIZE:
-                llm_response = (
-                    llm_response[:MAX_RESPONSE_SIZE]
-                    + "\n[TRUNCATED - Response exceeded size limit]"
-                )
+            # Add unknown model message if applicable
+            if unknown_model_msg:
+                llm_response = llm_response + unknown_model_msg
 
-            return llm_response, None
+            # Return reasoning budget (for OpenAI effort models, return a special value)
+            if reasoning_mode and is_openai_model:
+                return (
+                    llm_response,
+                    None,
+                    -1,
+                )  # Special marker for effort-based reasoning
+            else:
+                return llm_response, None, reasoning_budget if reasoning_mode else None
 
     except httpx.TimeoutException:
-        return "", "Request timed out after 30 seconds"
+        return "", f"Request timed out after {OPENROUTER_TIMEOUT} seconds", None
     except Exception as e:
-        return "", f"Error calling API: {e}"
+        return "", f"Error calling API: {e}", None
 
 
 async def consultation_impl(
@@ -742,9 +1082,22 @@ async def consultation_impl(
     size_info = f"\n\n[File collection summary: {len(files)} files, {total_size:,} bytes used of {MAX_TOTAL_SIZE:,} bytes available ({(total_size / MAX_TOTAL_SIZE) * 100:.1f}% utilized)]"
 
     # Get model context info to display
+    # For OpenAI, we need to preserve the context specification
+    if provider == "openai" and "|" in model:
+        # Keep model|context but remove |thinking if present
+        parts = model.split("|")
+        if len(parts) >= 2 and parts[-1] == "thinking":
+            # Remove only the thinking part
+            model_for_info = "|".join(parts[:-1])
+        else:
+            model_for_info = model
+    else:
+        # For other providers, just strip everything after first |
+        model_for_info = model.split("|")[0] if "|" in model else model
+
     try:
-        model_info = await get_model_context_info(model)
-        model_context_length = model_info.get("context_length", 128000)
+        model_info = await get_model_context_info(model_for_info)
+        model_context_length = model_info.get("context_length", DEFAULT_CONTEXT_LENGTH)
     except ValueError as e:
         return f"Error: {str(e)}"
 
@@ -756,12 +1109,41 @@ async def consultation_impl(
         token_info += f" (Model limit: {model_context_length:,} tokens)"
 
     # Call appropriate LLM based on provider
+    thinking_budget = None
     if provider == "google":
-        response, error = await call_google(content + size_info, query, model)
+        response, error, thinking_budget = await call_google(
+            content + size_info, query, model
+        )
     elif provider == "openai":
         response, error = await call_openai(content + size_info, query, model)
     else:  # openrouter (default)
-        response, error = await call_openrouter(content + size_info, query, model)
+        response, error, thinking_budget = await call_openrouter(
+            content + size_info, query, model
+        )
+
+    # Add thinking/reasoning budget info if applicable (even for errors)
+    if thinking_budget is not None:
+        budget_type = "thinking" if provider == "google" else "reasoning"
+        if thinking_budget == -1:
+            # Special marker for OpenAI effort-based reasoning
+            token_info += f", {budget_type} mode: effort=high (~80% of output budget)"
+        elif thinking_budget > 0:
+            # Calculate percentage of maximum possible thinking
+            max_thinking = (
+                FLASH_MAX_THINKING_TOKENS
+                if "flash" in model.lower()
+                else PRO_MAX_THINKING_TOKENS
+            )
+            if provider == "openrouter":
+                # OpenRouter has model-specific limits
+                if "gemini" in model.lower() and "flash" in model.lower():
+                    max_thinking = FLASH_MAX_THINKING_TOKENS  # 24,576
+                else:
+                    max_thinking = MAX_REASONING_TOKENS  # 32,000
+            percentage = (thinking_budget / max_thinking) * 100
+            token_info += f", {budget_type} budget: {thinking_budget:,} tokens ({percentage:.1f}% of max)"
+        else:
+            token_info += f", {budget_type} disabled (insufficient context)"
 
     if error:
         return f"Error calling {provider} LLM: {error}\n\nCollected {len(files)} files ({total_size:,} bytes){token_info}"
@@ -781,12 +1163,7 @@ async def test_api_connection():
         return False
 
     # Use a default test model for each provider
-    test_models = {
-        "openrouter": "google/gemini-2.5-flash-preview-05-20",
-        "google": "gemini-2.0-flash-exp",
-        "openai": "gpt-4o-mini|128k",
-    }
-    test_model = test_models.get(provider, "google/gemini-2.5-flash-preview-05-20")
+    test_model = TEST_MODELS.get(provider, TEST_MODELS["openrouter"])
 
     # Simple test query
     test_content = "This is a test file with sample content."
@@ -794,11 +1171,11 @@ async def test_api_connection():
 
     # Call appropriate provider
     if provider == "google":
-        response, error = await call_google(test_content, test_query, test_model)
+        response, error, _ = await call_google(test_content, test_query, test_model)
     elif provider == "openai":
         response, error = await call_openai(test_content, test_query, test_model)
     else:  # openrouter
-        response, error = await call_openrouter(test_content, test_query, test_model)
+        response, error, _ = await call_openrouter(test_content, test_query, test_model)
 
     if error:
         print(f"\nError: {error}")
@@ -823,7 +1200,7 @@ async def main():
         args = args[:-1]  # Remove --test from args
 
     # Validate arguments
-    if len(args) < 2:
+    if len(args) < MIN_ARGS:
         print("Error: Missing required arguments")
         print("Usage: consult7 <provider> <api-key> [--test]")
         print()
@@ -834,12 +1211,12 @@ async def main():
         print("  consult7 google AIza...")
         print("  consult7 openai sk-proj-...")
         print("  consult7 openrouter sk-or-v1-... --test")
-        sys.exit(1)
+        sys.exit(EXIT_FAILURE)
 
-    if len(args) > 2:
-        print(f"Error: Too many arguments. Expected 2, got {len(args)}")
+    if len(args) > MIN_ARGS:
+        print(f"Error: Too many arguments. Expected {MIN_ARGS}, got {len(args)}")
         print("Usage: consult7 <provider> <api-key> [--test]")
-        sys.exit(1)
+        sys.exit(EXIT_FAILURE)
 
     # Parse provider and api key
     provider = args[0]
@@ -925,7 +1302,7 @@ async def main():
     # Run test mode if requested
     if test_mode:
         success = await test_api_connection()
-        sys.exit(0 if success else 1)
+        sys.exit(EXIT_SUCCESS if success else EXIT_FAILURE)
 
     # Normal server mode
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
@@ -934,7 +1311,7 @@ async def main():
             write_stream,
             InitializationOptions(
                 server_name="consult7",
-                server_version="1.2.0",
+                server_version=SERVER_VERSION,
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},

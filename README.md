@@ -33,7 +33,7 @@ When working with AI agents that have limited context windows (like Claude with 
 ### Complex analysis with thinking mode
 * **Query:** "Analyze the authentication flow across this codebase. Think step by step about security vulnerabilities and suggest improvements"
 * **Pattern:** `".*\.(py|js|ts)$"`
-* **Model:** `"google/gemini-2.5-flash|thinking"` (with OpenRouter) or `"gemini-2.5-flash|thinking"` (with Google)
+* **Model:** `"gemini-2.5-flash|thinking"`
 * **Path:** `/Users/john/webapp`
 
 ## Installation
@@ -86,14 +86,43 @@ uvx consult7 <provider> <api-key> [--test]
 
 The model is specified when calling the tool, not at startup. The server shows example models for your provider on startup.
 
-### Thinking Mode
+### Model Examples
 
-Enable advanced reasoning/thinking modes by adding the `|thinking` suffix to supported models:
+#### Google
+Standard models:
+- `"gemini-2.5-flash"` - Fast model
+- `"gemini-2.5-pro"` - Intelligent model
+- `"gemini-2.0-flash-exp"` - Experimental model
 
-- **OpenRouter**: `"google/gemini-2.5-flash|thinking"` - Enables reasoning mode with high effort
-- **Google**: `"gemini-2.5-flash|thinking"` - Enables thinking mode with dynamic budget
+With thinking mode (add `|thinking` suffix):
+- `"gemini-2.5-flash|thinking"` - Fast with deep reasoning
+- `"gemini-2.5-pro|thinking"` - Intelligent with deep reasoning
 
+#### OpenRouter
+Standard models:
+- `"google/gemini-2.5-pro"` - Intelligent, 1M context
+- `"google/gemini-2.5-flash"` - Fast, 1M context
+- `"anthropic/claude-sonnet-4"` - Claude Sonnet, 200k context
+- `"openai/gpt-4.1"` - GPT-4.1, 1M+ context
 
+With reasoning mode (add `|thinking` suffix):
+- `"anthropic/claude-sonnet-4|thinking"` - Claude with 31,999 reasoning tokens
+- `"openai/gpt-4.1|thinking"` - GPT-4.1 with reasoning effort=high
+
+#### OpenAI
+Standard models (include context length):
+- `"gpt-4.1-2025-04-14|1047576"` - 1M+ context, very fast
+- `"gpt-4.1-nano-2025-04-14|1047576"` - 1M+ context, ultra fast
+- `"o3-2025-04-16|200k"` - Advanced reasoning model
+- `"o4-mini-2025-04-16|200k"` - Fast reasoning model
+
+O-series models with |thinking marker:
+- `"o1-mini|128k|thinking"` - Mini reasoning with |thinking marker
+- `"o3-2025-04-16|200k|thinking"` - Advanced reasoning with |thinking marker
+
+**Note:** For OpenAI, |thinking is only supported on o-series models and serves as an informational marker. The models use reasoning tokens automatically.
+
+**Advanced:** You can specify custom thinking tokens with `|thinking=30000` but this is rarely needed. 
 
 ## Testing
 

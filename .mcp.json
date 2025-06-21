@@ -6,6 +6,16 @@
         "-y",
         "@upstash/context7-mcp@latest"
       ]
+    },
+    "consult7": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "consult7",
+        "openrouter",
+        "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"
+      ],
+      "env": {}
     }
   }
 }

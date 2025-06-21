@@ -143,7 +143,12 @@ async def consultation_impl(
     try:
         async with asyncio.timeout(LLM_CALL_TIMEOUT):
             response, error, thinking_budget = await provider_instance.call_llm(
-                content + size_info, query, model, api_key, thinking_mode, custom_thinking
+                content + size_info,
+                query,
+                model,
+                api_key,
+                thinking_mode,
+                custom_thinking,
             )
     except asyncio.TimeoutError:
         return f"Error: Request timed out after {LLM_CALL_TIMEOUT} seconds. Try using fewer files or a smaller query.\n\nCollected {len(files)} files ({total_size:,} bytes){token_info}"

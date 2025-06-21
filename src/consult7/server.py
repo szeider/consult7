@@ -22,7 +22,7 @@ from .consultation import consultation_impl
 
 class Consult7Server(Server):
     """Extended MCP Server that stores API configuration."""
-    
+
     def __init__(self, name: str, api_key: str, provider: str):
         super().__init__(name)
         self.api_key = api_key
@@ -164,16 +164,23 @@ async def main():
                 )
                 return [types.TextContent(type="text", text=result)]
             else:
-                return [types.TextContent(type="text", text=f"Error: Unknown tool '{name}'")]
+                return [
+                    types.TextContent(type="text", text=f"Error: Unknown tool '{name}'")
+                ]
         except Exception as e:
             # Log the full error for debugging
             print(f"Error in {name}: {type(e).__name__}: {str(e)}")
-            
+
             # Simple error message mapping
             error_str = str(e).lower()
-            if any(x in error_str for x in ["connection", "network", "timeout", "unreachable"]):
+            if any(
+                x in error_str
+                for x in ["connection", "network", "timeout", "unreachable"]
+            ):
                 error_msg = "Network error. Please check your internet connection."
-            elif any(x in error_str for x in ["unauthorized", "401", "403", "invalid api"]):
+            elif any(
+                x in error_str for x in ["unauthorized", "401", "403", "invalid api"]
+            ):
                 error_msg = "Invalid API key. Please check your credentials."
             elif any(x in error_str for x in ["rate limit", "429", "quota"]):
                 error_msg = "Rate limit exceeded. Please wait and try again."
@@ -184,7 +191,7 @@ async def main():
             else:
                 # Return the original error if no mapping
                 error_msg = str(e)
-            
+
             return [types.TextContent(type="text", text=f"Error: {error_msg}")]
 
     # Show model examples for the provider

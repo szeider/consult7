@@ -25,6 +25,7 @@ DEFAULT_TEMPERATURE = 0.7  # Default temperature for all providers
 OPENROUTER_TIMEOUT = 30.0  # Timeout for OpenRouter API calls
 API_FETCH_TIMEOUT = 10.0  # Timeout for fetching model info
 DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
+LLM_CALL_TIMEOUT = 22.0  # 22 seconds - 3s buffer before MCP's 25s timeout
 
 # Application constants
 SERVER_VERSION = "1.2.1"

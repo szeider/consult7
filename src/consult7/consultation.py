@@ -1,8 +1,9 @@
 """Main consultation orchestration logic for Consult7."""
 
+import asyncio
 from typing import Optional
 
-from .constants import DEFAULT_CONTEXT_LENGTH
+from .constants import DEFAULT_CONTEXT_LENGTH, LLM_CALL_TIMEOUT
 from .file_processor import discover_files, format_content
 from .token_utils import estimate_tokens, parse_model_thinking
 from .providers import PROVIDERS
@@ -138,10 +139,14 @@ async def consultation_impl(
     actual_model, custom_thinking = parse_model_thinking(model)
     thinking_mode = custom_thinking is not None or model.endswith("|thinking")
 
-    # Call the provider
-    response, error, thinking_budget = await provider_instance.call_llm(
-        content + size_info, query, model, api_key, thinking_mode, custom_thinking
-    )
+    # Call the provider with timeout protection
+    try:
+        async with asyncio.timeout(LLM_CALL_TIMEOUT):
+            response, error, thinking_budget = await provider_instance.call_llm(
+                content + size_info, query, model, api_key, thinking_mode, custom_thinking
+            )
+    except asyncio.TimeoutError:
+        return f"Error: Request timed out after {LLM_CALL_TIMEOUT} seconds. Try using fewer files or a smaller query.\n\nCollected {len(files)} files ({total_size:,} bytes){token_info}"
 
     # Add thinking/reasoning budget info if applicable (even for errors)
     if thinking_budget is not None:

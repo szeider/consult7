@@ -151,19 +151,41 @@ async def main():
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         """Handle tool calls."""
-        if name == "consultation":
-            result = await consultation_impl(
-                arguments["path"],
-                arguments["pattern"],
-                arguments["query"],
-                arguments["model"],
-                arguments.get("exclude_pattern"),
-                server.provider,
-                server.api_key,
-            )
-            return [types.TextContent(type="text", text=result)]
-        else:
-            raise ValueError(f"Unknown tool: {name}")
+        try:
+            if name == "consultation":
+                result = await consultation_impl(
+                    arguments["path"],
+                    arguments["pattern"],
+                    arguments["query"],
+                    arguments["model"],
+                    arguments.get("exclude_pattern"),
+                    server.provider,
+                    server.api_key,
+                )
+                return [types.TextContent(type="text", text=result)]
+            else:
+                return [types.TextContent(type="text", text=f"Error: Unknown tool '{name}'")]
+        except Exception as e:
+            # Log the full error for debugging
+            print(f"Error in {name}: {type(e).__name__}: {str(e)}")
+            
+            # Simple error message mapping
+            error_str = str(e).lower()
+            if any(x in error_str for x in ["connection", "network", "timeout", "unreachable"]):
+                error_msg = "Network error. Please check your internet connection."
+            elif any(x in error_str for x in ["unauthorized", "401", "403", "invalid api"]):
+                error_msg = "Invalid API key. Please check your credentials."
+            elif any(x in error_str for x in ["rate limit", "429", "quota"]):
+                error_msg = "Rate limit exceeded. Please wait and try again."
+            elif "not found" in error_str and "model" in error_str:
+                error_msg = "Model not found. Please check the model name."
+            elif any(x in error_str for x in ["too large", "exceeds", "context"]):
+                error_msg = "Content too large. Try using fewer files or a larger context model."
+            else:
+                # Return the original error if no mapping
+                error_msg = str(e)
+            
+            return [types.TextContent(type="text", text=f"Error: {error_msg}")]
 
     # Show model examples for the provider
     print("Starting Consult7 MCP Server")

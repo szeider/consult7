@@ -28,10 +28,12 @@ THINKING_LIMITS = {
     "gemini-2.0-flash-thinking-exp-01-21": 32_768,
     "gemini-2.5-flash": 24_576,
     "gemini-2.5-flash-latest": 24_576,
+    "gemini-2.5-flash-lite-preview-06-17": 24_576,  # Flash Lite uses same limit as Flash
     "gemini-2.5-pro": 32_768,
     "gemini-2.5-pro-latest": 32_768,
     # OpenRouter models
     "google/gemini-2.5-flash": 24_576,
+    "google/gemini-2.5-flash-lite-preview-06-17": 24_576,  # Flash Lite on OpenRouter
     "google/gemini-2.5-pro": 32_768,
     "anthropic/claude-opus-4": 31_999,  # Actual limit is 31,999, not 32,000
     "anthropic/claude-sonnet-4": 31_999,  # Using same limit for consistency

@@ -1,7 +1,10 @@
 """OpenRouter provider implementation for Consult7."""
 
+import logging
 from typing import Optional, Tuple
 import httpx
+
+logger = logging.getLogger("consult7")
 
 from .base import BaseProvider, process_llm_response
 from ..constants import (
@@ -42,8 +45,8 @@ class OpenRouterProvider(BaseProvider):
                 )
 
                 if response.status_code != 200:
-                    print(
-                        f"Warning: Could not fetch model info: {response.status_code}"
+                    logger.warning(
+                        f"Could not fetch model info: {response.status_code}"
                     )
                     return None
 
@@ -64,13 +67,13 @@ class OpenRouterProvider(BaseProvider):
                         }
 
                 # Model not found in list
-                print(
-                    f"Warning: Model '{model_name}' not found in OpenRouter models list"
+                logger.warning(
+                    f"Model '{model_name}' not found in OpenRouter models list"
                 )
                 return None
 
         except Exception as e:
-            print(f"Warning: Error fetching model info: {e}")
+            logger.warning(f"Error fetching model info: {e}")
             return None
 
     async def call_llm(

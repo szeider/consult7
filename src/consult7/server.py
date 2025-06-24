@@ -1,6 +1,7 @@
 """Consult7 MCP server - Analyze large file collections with AI models."""
 
 import sys
+import logging
 from mcp.server import Server
 import mcp.server.stdio
 import mcp.types as types
@@ -9,15 +10,16 @@ from mcp.server.lowlevel import NotificationOptions
 
 # Import constants
 from .constants import SERVER_VERSION, EXIT_SUCCESS, EXIT_FAILURE, MIN_ARGS, TEST_MODELS
-
-# Import tool definitions
 from .tool_definitions import ToolDescriptions
-
-# Import provider utilities
 from .providers import PROVIDERS
-
-# Import consultation logic
 from .consultation import consultation_impl
+
+# Set up consult7 logger
+logger = logging.getLogger("consult7")
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler(sys.stderr)
+handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+logger.addHandler(handler)
 
 
 class Consult7Server(Server):
@@ -169,7 +171,7 @@ async def main():
                 ]
         except Exception as e:
             # Log the full error for debugging
-            print(f"Error in {name}: {type(e).__name__}: {str(e)}")
+            logger.error(f"Error in {name}: {type(e).__name__}: {str(e)}")
 
             # Simple error message mapping
             error_str = str(e).lower()
@@ -195,17 +197,17 @@ async def main():
             return [types.TextContent(type="text", text=f"Error: {error_msg}")]
 
     # Show model examples for the provider
-    print("Starting Consult7 MCP Server")
-    print(f"Provider: {server.provider}")
-    print("API Key: Set")
+    logger.info("Starting Consult7 MCP Server")
+    logger.info(f"Provider: {server.provider}")
+    logger.info("API Key: Set")
 
     examples = ToolDescriptions.MODEL_EXAMPLES.get(server.provider, [])
     if examples:
-        print(f"\nExample models for {server.provider}:")
+        logger.info(f"Example models for {server.provider}:")
         for example in examples:
-            print(f"  - {example}")
+            logger.info(f"  - {example}")
         if server.provider == "openai":
-            print("  Note: Include context length with | separator")
+            logger.info("  Note: Include context length with | separator")
 
     # Run test mode if requested
     if test_mode:

@@ -1,6 +1,9 @@
 """Google AI provider implementation for Consult7."""
 
+import logging
 from typing import Optional, Tuple
+
+logger = logging.getLogger("consult7")
 
 # Provider-specific imports will be done conditionally
 try:
@@ -49,7 +52,7 @@ class GoogleProvider(BaseProvider):
                 "provider": "google",
             }
         except Exception as e:
-            print(f"Warning: Could not fetch Google model info: {e}")
+            logger.warning(f"Could not fetch Google model info: {e}")
             return None
 
     async def call_llm(

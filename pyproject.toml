@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consult7"
-version = "1.2.2"
+version = "1.3.0"
 description = "MCP server for consulting large context window models to analyze extensive file collections"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,3 +43,18 @@ dev = [
     "ruff>=0.11.13",
     "anthropic>=0.52.0",  # For MCP testing support
 ]
+
+[tool.ruff]
+lint.select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "T201",   # flake8-print: print found
+]
+lint.ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Allow print statements in test files
+"tests/**/*.py" = ["T201"]
+# Allow print statements in server.py for CLI output and test mode
+"src/consult7/server.py" = ["T201"]

@@ -1,12 +1,15 @@
 """Main consultation orchestration logic for Consult7."""
 
 import asyncio
+import logging
 from typing import Optional
 
 from .constants import DEFAULT_CONTEXT_LENGTH, LLM_CALL_TIMEOUT
 from .file_processor import discover_files, format_content
 from .token_utils import estimate_tokens, parse_model_thinking
 from .providers import PROVIDERS
+
+logger = logging.getLogger("consult7")
 
 
 async def get_model_context_info(
@@ -35,7 +38,7 @@ async def get_model_context_info(
         # Get provider instance
         provider_instance = PROVIDERS.get(provider)
         if not provider_instance:
-            print(f"Warning: Unknown provider '{provider}'")
+            logger.warning(f"Unknown provider '{provider}'")
             return {"context_length": DEFAULT_CONTEXT_LENGTH, "provider": provider}
 
         # Handle OpenAI special case
@@ -58,8 +61,8 @@ async def get_model_context_info(
             return info
 
         # Fallback to default if no info available
-        print(
-            f"Warning: Could not determine context length for {model_name}, using default of 128k tokens"
+        logger.warning(
+            f"Could not determine context length for {model_name}, using default of 128k tokens"
         )
         return {"context_length": DEFAULT_CONTEXT_LENGTH, "provider": provider}
 
@@ -67,7 +70,7 @@ async def get_model_context_info(
         # Re-raise ValueError to be caught by caller
         raise
     except Exception as e:
-        print(f"Error getting model info: {e}")
+        logger.error(f"Error getting model info: {e}")
         return {"context_length": DEFAULT_CONTEXT_LENGTH, "provider": provider}
 
 

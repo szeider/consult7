@@ -91,22 +91,26 @@ The model is specified when calling the tool, not at startup. The server shows e
 #### Google
 Standard models:
 - `"gemini-2.5-flash"` - Fast model
+- `"gemini-2.5-flash-lite-preview-06-17"` - Ultra fast lite model
 - `"gemini-2.5-pro"` - Intelligent model
 - `"gemini-2.0-flash-exp"` - Experimental model
 
 With thinking mode (add `|thinking` suffix):
 - `"gemini-2.5-flash|thinking"` - Fast with deep reasoning
+- `"gemini-2.5-flash-lite-preview-06-17|thinking"` - Ultra fast with deep reasoning
 - `"gemini-2.5-pro|thinking"` - Intelligent with deep reasoning
 
 #### OpenRouter
 Standard models:
 - `"google/gemini-2.5-pro"` - Intelligent, 1M context
 - `"google/gemini-2.5-flash"` - Fast, 1M context
+- `"google/gemini-2.5-flash-lite-preview-06-17"` - Ultra fast, 1M context
 - `"anthropic/claude-sonnet-4"` - Claude Sonnet, 200k context
 - `"openai/gpt-4.1"` - GPT-4.1, 1M+ context
 
 With reasoning mode (add `|thinking` suffix):
 - `"anthropic/claude-sonnet-4|thinking"` - Claude with 31,999 reasoning tokens
+- `"google/gemini-2.5-flash-lite-preview-06-17|thinking"` - Ultra fast with reasoning
 - `"openai/gpt-4.1|thinking"` - GPT-4.1 with reasoning effort=high
 
 #### OpenAI

@@ -8,16 +8,20 @@ class ToolDescriptions:
         "openrouter": [
             '"google/gemini-2.5-pro" (intelligent, 1M context)',
             '"google/gemini-2.5-flash" (fast, 1M context)',
+            '"google/gemini-2.5-flash-lite-preview-06-17" (ultra fast, 1M context)',
             '"anthropic/claude-sonnet-4" (Claude Sonnet, 200k context)',
             '"openai/gpt-4.1" (GPT-4.1, 1M+ context)',
             '"anthropic/claude-sonnet-4|thinking" (Claude with 31,999 tokens)',
+            '"google/gemini-2.5-flash-lite-preview-06-17|thinking" (ultra fast with reasoning)',
             '"openai/gpt-4.1|thinking" (GPT-4.1 with reasoning effort=high)',
         ],
         "google": [
             '"gemini-2.5-flash" (fast, standard mode)',
+            '"gemini-2.5-flash-lite-preview-06-17" (ultra fast, lite model)',
             '"gemini-2.5-pro" (intelligent, standard mode)',
             '"gemini-2.0-flash-exp" (experimental model)',
             '"gemini-2.5-flash|thinking" (fast with deep reasoning)',
+            '"gemini-2.5-flash-lite-preview-06-17|thinking" (ultra fast with deep reasoning)',
             '"gemini-2.5-pro|thinking" (intelligent with deep reasoning)',
         ],
         "openai": [

@@ -78,14 +78,18 @@ class OpenRouterProvider(BaseProvider):
 
     async def call_llm(
         self,
-        content: str,
+        content: str, # Keep as str for now, OpenRouter provider may not support images for all models
         query: str,
         model_name: str,
         api_key: str,
-        thinking_mode: bool = False,
-        thinking_budget: Optional[int] = None,
+        thinking_mode: bool = False, # Param less relevant due to parsing
+        thinking_budget: Optional[int] = None, # Param less relevant
     ) -> Tuple[str, Optional[str], Optional[int]]:
         """Call OpenRouter API with the content and query.
+        NOTE: Image analysis via this provider depends on the underlying model supporting
+        multimodal inputs in the standard way OpenRouter proxies them.
+        Currently, this implementation assumes text-only content for OpenRouter.
+        Future enhancements could add model-specific multimodal handling if OpenRouter API allows.
 
         Returns:
             Tuple of (response, error, reasoning_budget_used)
@@ -93,9 +97,24 @@ class OpenRouterProvider(BaseProvider):
         if not api_key:
             return "", "No API key provided. Use --api-key flag", None
 
+        # Add a check for content type if it were to change
+        if not isinstance(content, str):
+            # This check is if `content` parameter type changes.
+            # If `content` remains `str`, this provider implicitly only handles text.
+            # If `content` becomes `List[Dict[str, Any]]` like in GoogleProvider,
+            # then we need to explicitly state that only text parts are used or error out.
+            # For now, assuming `content` is `str` as per original signature.
+            # If it changes, this logic needs to adapt.
+            # Example if content became List[Dict]:
+            # if any(part.get("mime_type", "").startswith("image/") for part in content):
+            #    return "", "OpenRouter provider does not currently support image content through this implementation.", None
+            # text_content_parts = [part["text"] for part in content if "text" in part]
+            # content = "\n".join(text_content_parts) # Reconstruct a single string if needed
+            pass # Assuming content is string for now.
+
         # Parse model and thinking override
         actual_model, custom_thinking = parse_model_thinking(model_name)
-        reasoning_mode = custom_thinking is not None or model_name.endswith("|thinking")
+        reasoning_mode = custom_thinking is not None or model_name.endswith("|thinking") # or thinking_mode
 
         # Get model context info
         try:

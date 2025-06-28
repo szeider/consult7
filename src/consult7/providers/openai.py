@@ -30,14 +30,16 @@ class OpenAIProvider(BaseProvider):
 
     async def call_llm(
         self,
-        content: str,
+        content: str, # Keep as str for now, OpenAI provider doesn't support images yet
         query: str,
         model_name: str,
         api_key: str,
-        thinking_mode: bool = False,
-        thinking_budget: Optional[int] = None,
+        thinking_mode: bool = False, # This param is less relevant now with parsing
+        thinking_budget: Optional[int] = None, # This param is less relevant
     ) -> Tuple[str, Optional[str], Optional[int]]:
         """Call OpenAI API with the content and query.
+        NOTE: Image analysis is not currently supported for OpenAI models.
+        Content should be a string.
 
         Returns:
             Tuple of (response, error, thinking_budget_used)
@@ -51,6 +53,10 @@ class OpenAIProvider(BaseProvider):
 
         if not api_key:
             return "", "No API key provided. Use --api-key flag", None
+
+        # Add a check for content type if it were to change
+        if not isinstance(content, str):
+            return "", "OpenAI provider currently only supports text content.", None
 
         # Parse model name for thinking mode and context
         parts = model_name.split("|") if "|" in model_name else [model_name]

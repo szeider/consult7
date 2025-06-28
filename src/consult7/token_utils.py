@@ -136,3 +136,53 @@ def get_thinking_budget(
 
     # Unknown model without override - return None to disable thinking
     return None
+
+
+def estimate_image_tokens(base64_data: str, mime_type: str) -> int:
+    """Estimate tokens for an image based on Gemini API guidelines.
+
+    Args:
+        base64_data: The base64 encoded image data. (Not directly used in this estimation,
+                     but could be used for more complex dimension-based calculation if needed)
+        mime_type: The MIME type of the image (e.g., "image/png", "image/jpeg").
+                   (Not directly used yet, but good for future extension)
+
+    Returns:
+        Estimated number of tokens for the image.
+    """
+    # Gemini's simple model for image token cost:
+    # Each image costs 258 tokens.
+    # This is a simplified model. Actual token cost can vary based on image content and resolution,
+    # and the specific Gemini model version.
+    # For more accurate calculations, especially for `gemini-pro-vision` or future models,
+    # one might need to consider image dimensions or use a library that implements
+    # Google's more detailed token calculation logic if available.
+    # See: https://ai.google.dev/gemini-api/docs/prompting-best-practices#image_input
+    # and https://ai.google.dev/gemini-api/docs/vision#understand_token_usage
+
+    # As of latest Gemini 1.5 Flash/Pro documentation, a common flat rate is often applied per image,
+    # or a base cost plus a variable component.
+    # The GitHub issue mentions:
+    # Small images (under 384x384): ~85 tokens
+    # Medium images (up to 768x768): ~170 tokens
+    # Large images: Calculate based on dimensions
+    #
+    # However, the official Gemini API docs (linked above) for Gemini 1.0 Pro say:
+    # "Each image input has a fixed cost of 258 tokens."
+    # For Gemini 1.5 Flash and Pro (via Vertex AI, which might differ slightly from genai SDK):
+    # "Each image costs 258 tokens, regardless of size, resolution, or if it's a video frame."
+    # (Source: https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/send-multimodal-prompts#understand_token_usage)
+
+    # Given the consistency of "258 tokens per image" in recent official docs for 1.0 Pro and 1.5 models,
+    # we'll use that as a starting point.
+    # The values in the issue (85, 170) might be outdated or specific to older models/APIs.
+    # It's safer to use the documented fixed cost if a more complex calculation isn't implemented.
+
+    # If a more complex calculation based on dimensions (as hinted in the issue) is required,
+    # this function would need to:
+    # 1. Decode the base64_data to get image bytes.
+    # 2. Use a library like Pillow to get image dimensions.
+    # 3. Apply the tiered logic (small, medium, large) or a formula.
+    # For now, sticking to the fixed cost from documentation.
+
+    return 258 # Fixed token cost per image as per Gemini 1.0 Pro / 1.5 Flash/Pro docs.

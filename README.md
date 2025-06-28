@@ -77,14 +77,57 @@ No installation required - `uvx` automatically downloads and runs consult7 in an
 ## Command Line Options
 
 ```bash
-uvx consult7 <provider> <api-key> [--test]
+uvx consult7 <provider> <api-key> [--include-images] [--test]
 ```
 
-- `<provider>`: Required. Choose from `openrouter`, `google`, or `openai`
-- `<api-key>`: Required. Your API key for the chosen provider
-- `--test`: Optional. Test the API connection
+- `<provider>`: Required. Choose from `openrouter`, `google`, or `openai`.
+- `<api-key>`: Required. Your API key for the chosen provider.
+- `--include-images`: Optional. Enable image file processing (currently for Google Gemini vision models). When enabled, supported image types matching the pattern will be included for analysis.
+- `--test`: Optional. Test the API connection with the provider.
 
 The model is specified when calling the tool, not at startup. The server shows example models for your provider on startup.
+
+## Image Analysis (Multimodal)
+
+Consult7 now supports image analysis for providers and models that have vision capabilities, currently focused on **Google Gemini models**.
+
+To enable image analysis:
+1.  Use the `google` provider.
+2.  Add the `--include-images` flag when starting the `consult7` server.
+    ```bash
+    # Example for Claude Code
+    claude mcp add -s user consult7 uvx -- consult7 google your-api-key --include-images
+
+    # Example for Claude Desktop (modify args)
+    # "args": ["consult7", "google", "your-api-key", "--include-images"]
+    ```
+3.  Ensure your file `--pattern` includes image extensions (e.g., `".*\.(png|jpg|jpeg|webp|vue|css)$"`).
+4.  Use a Gemini model that supports vision (e.g., `gemini-2.5-flash`, `gemini-2.5-pro`).
+
+### Supported Image Formats
+When `--include-images` is active with the Google provider, the following image formats can be processed:
+- PNG (`.png`)
+- JPEG (`.jpg`, `.jpeg`)
+- WebP (`.webp`)
+- GIF (`.gif`)
+- BMP (`.bmp`)
+- SVG (`.svg`) (Note: SVG rendering for analysis depends on model capabilities)
+
+### Token Usage for Images
+Image token costs are specific to the model. For Gemini models (like 1.0 Pro, 1.5 Flash/Pro), a common cost is **258 tokens per image**, regardless of size or resolution. This will be factored into the total token count when images are included. Always refer to the specific model's documentation for the most accurate token counting rules.
+
+### Example Image Analysis Use Case
+
+Analyze UI screenshots along with Vue components:
+* **Provider:** `google`
+* **Server startup:** `uvx consult7 google YOUR_API_KEY --include-images`
+* **Tool call parameters:**
+    *   `path`: `./my-app`
+    *   `pattern`: `".*\.(png|vue|css)$"`
+    *   `query`: `"Analyze these UI screenshots (logo.png, homepage.png) along with the Vue components and CSS. Suggest improvements to the UI/UX and identify any inconsistencies between the design and the code."`
+    *   `model`: `"gemini-2.5-flash"`
+
+**Note:** For `openrouter` and `openai` providers, image analysis is not currently supported by this tool. If `--include-images` is used with these providers, images found by the pattern will be noted but their content will not be sent to the model.
 
 ### Model Examples
 

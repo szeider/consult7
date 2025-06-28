@@ -72,78 +72,84 @@ async def main():
     # Simple argument parsing
     args = sys.argv[1:]
     test_mode = False
+    include_images = False # New flag
 
-    # Check for --test flag at the end
-    if args and args[-1] == "--test":
-        test_mode = True
-        args = args[:-1]  # Remove --test from args
+    # Process flags like --test and --include-images
+    processed_args = []
+    for arg in args:
+        if arg == "--test":
+            test_mode = True
+        elif arg == "--include-images":
+            include_images = True
+        else:
+            processed_args.append(arg)
 
-    # Validate arguments
-    if len(args) < MIN_ARGS:
-        print("Error: Missing required arguments")
-        print("Usage: consult7 <provider> <api-key> [--test]")
+    args = processed_args
+
+    # Validate arguments (provider and api_key are mandatory)
+    if len(args) < MIN_ARGS: # MIN_ARGS is likely 2 (provider, api_key)
+        print("Error: Missing required arguments.")
+        print("Usage: consult7 <provider> <api-key> [--include-images] [--test]")
         print()
         print("Providers: openrouter, google, openai")
+        print("Flags:")
+        print("  --include-images: Enable image processing (currently Google provider only).")
+        print("  --test: Run a connection test with the provider.")
         print()
         print("Examples:")
-        print("  consult7 openrouter sk-or-v1-...")
-        print("  consult7 google AIza...")
-        print("  consult7 openai sk-proj-...")
+        print("  consult7 google AIza... --include-images")
         print("  consult7 openrouter sk-or-v1-... --test")
         sys.exit(EXIT_FAILURE)
 
     if len(args) > MIN_ARGS:
-        print(f"Error: Too many arguments. Expected {MIN_ARGS}, got {len(args)}")
-        print("Usage: consult7 <provider> <api-key> [--test]")
+        print(f"Error: Too many positional arguments. Expected {MIN_ARGS}, got {len(args)}.")
+        print("Usage: consult7 <provider> <api-key> [--include-images] [--test]")
         sys.exit(EXIT_FAILURE)
 
-    # Parse provider and api key
     provider = args[0]
     api_key = args[1]
 
-    # Validate provider
-    if provider not in ["openrouter", "google", "openai"]:
-        print(f"Error: Invalid provider '{provider}'")
-        print("Valid providers: openrouter, google, openai")
-        sys.exit(1)
+    if provider not in PROVIDERS.keys():
+        print(f"Error: Invalid provider '{provider}'.")
+        print(f"Valid providers: {', '.join(PROVIDERS.keys())}")
+        sys.exit(EXIT_FAILURE)
 
-    # Create server with stored configuration
+    # Create server with stored configuration, now including include_images
     server = Consult7Server("consult7", api_key, provider)
+    # Store include_images flag on the server instance or pass it to relevant functions
+    server.include_images = include_images
 
     @server.list_tools()
     async def list_tools() -> list[types.Tool]:
-        """List available tools with provider-specific model examples."""
+        """List available tools with provider-specific model examples. (Temporarily simplified for debugging)"""
         return [
             types.Tool(
                 name="consultation",
-                description=ToolDescriptions.get_consultation_tool_description(
-                    server.provider
-                ),
+                description="Performs a consultation on a set of files.", # Static description
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "path": {
                             "type": "string",
-                            "description": ToolDescriptions.get_path_description(),
+                            "description": "Base path for file discovery.", # Static
                         },
                         "pattern": {
                             "type": "string",
-                            "description": ToolDescriptions.get_pattern_description(),
+                            "description": "Regex pattern to match files.", # Static
                         },
                         "query": {
                             "type": "string",
-                            "description": ToolDescriptions.get_query_description(),
+                            "description": "The query or question for the LLM.", # Static
                         },
                         "model": {
                             "type": "string",
-                            "description": ToolDescriptions.get_model_parameter_description(
-                                server.provider
-                            ),
+                            "description": "The model to use for consultation.", # Static
                         },
-                        "exclude_pattern": {
-                            "type": "string",
-                            "description": ToolDescriptions.get_exclude_pattern_description(),
-                        },
+                        # Temporarily commenting out optional exclude_pattern for maximum simplicity
+                        # "exclude_pattern": {
+                        #    "type": "string",
+                        #    "description": "Optional regex pattern to exclude files.", # Static
+                        # },
                     },
                     "required": ["path", "pattern", "query", "model"],
                 },
@@ -155,15 +161,24 @@ async def main():
         """Handle tool calls."""
         try:
             if name == "consultation":
-                result = await consultation_impl(
-                    arguments["path"],
-                    arguments["pattern"],
-                    arguments["query"],
-                    arguments["model"],
-                    arguments.get("exclude_pattern"),
-                    server.provider,
-                    server.api_key,
-                )
+                # Prepare keyword arguments from the 'arguments' dict
+                tool_kwargs = {
+                    "path": arguments["path"],
+                    "pattern": arguments["pattern"],
+                    "query": arguments["query"],
+                    "model": arguments["model"],
+                }
+                # Only add exclude_pattern if it's actually provided by the client
+                if "exclude_pattern" in arguments and arguments["exclude_pattern"] is not None:
+                    tool_kwargs["exclude_pattern"] = arguments["exclude_pattern"]
+
+                # Add server-provided arguments, also as keywords
+                tool_kwargs["provider"] = server.provider
+                tool_kwargs["api_key"] = server.api_key
+                tool_kwargs["include_images"] = server.include_images
+
+                # Call consultation_impl using keyword argument unpacking
+                result = await consultation_impl(**tool_kwargs)
                 return [types.TextContent(type="text", text=result)]
             else:
                 return [

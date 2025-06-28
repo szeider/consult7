@@ -2,10 +2,18 @@
 
 import os
 import re
+import base64
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict, Any
 
 from .constants import DEFAULT_IGNORED, MAX_FILE_SIZE, MAX_TOTAL_SIZE, FILE_SEPARATOR
+
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}
+
+
+def is_image_file(path: Path) -> bool:
+    """Check if a path corresponds to an image file."""
+    return path.suffix.lower() in IMAGE_EXTENSIONS
 
 
 def should_ignore_path(path: Path) -> bool:
@@ -19,7 +27,7 @@ def should_ignore_path(path: Path) -> bool:
 
 def discover_files(
     base_path: str, pattern: str, exclude_pattern: Optional[str] = None
-) -> Tuple[List[Path], List[str]]:
+) -> Tuple[List[Path], List[Path], List[str]]:
     """Discover files matching the pattern.
 
     Args:
@@ -28,27 +36,28 @@ def discover_files(
         exclude_pattern: Optional regex pattern to exclude files
 
     Returns:
-        Tuple of (matching_files, errors)
+        Tuple of (text_files, image_files, errors)
     """
     errors = []
-    matching_files = []
+    text_files = []
+    image_files = []
 
     try:
         base = Path(base_path).resolve()
         if not base.exists():
             errors.append(f"Path does not exist: {base_path}")
-            return [], errors
+            return [], [], errors
 
         if not base.is_dir():
             errors.append(f"Path is not a directory: {base_path}")
-            return [], errors
+            return [], [], errors
 
         # Compile regex patterns
         try:
             include_re = re.compile(pattern)
         except re.error as e:
             errors.append(f"Invalid include pattern '{pattern}': {e}")
-            return [], errors
+            return [], [], errors
 
         exclude_re = None
         if exclude_pattern:
@@ -56,7 +65,7 @@ def discover_files(
                 exclude_re = re.compile(exclude_pattern)
             except re.error as e:
                 errors.append(f"Invalid exclude pattern '{exclude_pattern}': {e}")
-                return [], errors
+                return [], [], errors
 
         # Walk directory tree
         for root, dirs, files in os.walk(base):
@@ -80,55 +89,63 @@ def discover_files(
                 if exclude_re and exclude_re.match(file):
                     continue
 
-                matching_files.append(file_path)
+                if is_image_file(file_path):
+                    image_files.append(file_path)
+                else:
+                    text_files.append(file_path)
 
     except PermissionError as e:
         errors.append(f"Permission denied: {e}")
     except Exception as e:
         errors.append(f"Error during file discovery: {e}")
 
-    return matching_files, errors
+    return text_files, image_files, errors
 
 
 def format_content(
-    base_path: str, files: List[Path], errors: List[str]
-) -> Tuple[str, int]:
-    """Format files into text content.
+    base_path: str,
+    text_files: List[Path],
+    image_files: List[Path],
+    errors: List[str],
+    include_images: bool = False,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Format files into a list of content parts (text or image).
 
     Args:
         base_path: Base directory for relative paths
-        files: List of file paths to format
+        text_files: List of text file paths to format
+        image_files: List of image file paths to format
         errors: List to append errors to
+        include_images: Whether to include image content
 
     Returns:
-        Tuple of (content, total_size)
+        Tuple of (content_parts, total_size)
     """
-    content_parts = []
+    content_list = []
     total_size = 0
+    all_files = sorted(text_files + image_files)
 
     # Add capacity information
-    content_parts.append(f"File Size Budget: {MAX_TOTAL_SIZE:,} bytes (100MB)")
-    content_parts.append(f"Files Found: {len(files)}")
-    content_parts.append("")
+    content_list.append(
+        {"text": f"File Size Budget: {MAX_TOTAL_SIZE:,} bytes (100MB)"}
+    )
+    content_list.append({"text": f"Files Found: {len(all_files)}"})
+    content_list.append({"text": ""})
 
     # Add directory tree
-    content_parts.append("Directory Structure:")
-    content_parts.append(FILE_SEPARATOR)
+    content_list.append({"text": "Directory Structure:"})
+    content_list.append({"text": FILE_SEPARATOR})
 
-    # Build simple tree structure
     base = Path(base_path).resolve()
     tree_lines = []
-
-    # Group files by directory
     dirs = {}
-    for file in sorted(files):
-        rel_path = file.relative_to(base)
+    for file_path in all_files:
+        rel_path = file_path.relative_to(base)
         dir_path = rel_path.parent
         if dir_path not in dirs:
             dirs[dir_path] = []
         dirs[dir_path].append(rel_path.name)
 
-    # Format tree
     for dir_path in sorted(dirs.keys()):
         if str(dir_path) == ".":
             tree_lines.append(f"{base_path}/")
@@ -137,49 +154,90 @@ def format_content(
         for filename in sorted(dirs[dir_path]):
             tree_lines.append(f"    - {filename}")
 
-    content_parts.extend(tree_lines)
-    content_parts.append("")
+    content_list.append({"text": "\n".join(tree_lines)})
+    content_list.append({"text": ""})
 
     # Add file contents
-    content_parts.append("File Contents:")
-    content_parts.append(FILE_SEPARATOR)
+    content_list.append({"text": "File Contents:"})
+    content_list.append({"text": FILE_SEPARATOR})
 
-    for file in sorted(files):
-        content_parts.append(f"\nFile: {file}")
-        content_parts.append(FILE_SEPARATOR)
+    for file_path in all_files:
+        content_list.append({"text": f"\nFile: {file_path}"})
+        content_list.append({"text": FILE_SEPARATOR})
 
         try:
-            # Check file size
-            file_size = file.stat().st_size
+            file_size = file_path.stat().st_size
+            estimated_size = file_size
+            is_img = is_image_file(file_path)
+
+            if is_img and include_images:
+                # Base64 encoding adds ~33% overhead
+                estimated_size = int(file_size * 1.33)
+
             if file_size > MAX_FILE_SIZE:
-                content_parts.append(
-                    f"[ERROR: File too large ({file_size} bytes > {MAX_FILE_SIZE} bytes)]"
+                content_list.append(
+                    {
+                        "text": f"[ERROR: File too large ({file_size:,} bytes > {MAX_FILE_SIZE:,} bytes)]"
+                    }
                 )
-                errors.append(f"File too large: {file} ({file_size} bytes)")
-            elif total_size + file_size > MAX_TOTAL_SIZE:
-                content_parts.append("[ERROR: Total size limit exceeded]")
-                errors.append(f"Total size limit exceeded at file: {file}")
-                break
+                errors.append(f"File too large: {file_path} ({file_size:,} bytes)")
+            elif total_size + estimated_size > MAX_TOTAL_SIZE:
+                content_list.append(
+                    {"text": "[ERROR: Total size limit exceeded for subsequent files]"}
+                )
+                errors.append(
+                    f"Total size limit reached before processing {file_path}. Estimated size: {estimated_size:,}"
+                )
+                break  # Stop processing further files
             else:
-                # Read file content
-                content = file.read_text(encoding="utf-8", errors="replace")
-                content_parts.append(content)
-                total_size += file_size
+                if is_img:
+                    if include_images:
+                        try:
+                            img_bytes = file_path.read_bytes()
+                            base64_encoded_data = base64.b64encode(img_bytes).decode(
+                                "utf-8"
+                            )
+                            mime_type = f"image/{file_path.suffix.lower().lstrip('.')}"
+                            if file_path.suffix.lower() == ".jpg":
+                                mime_type = "image/jpeg" # Common practice
+
+                            content_list.append(
+                                {
+                                    "inline_data": {
+                                        "mime_type": mime_type,
+                                        "data": base64_encoded_data,
+                                    }
+                                }
+                            )
+                            total_size += estimated_size
+                        except Exception as e:
+                            content_list.append({"text": f"[ERROR reading image: {e}]"})
+                            errors.append(f"Error reading image {file_path}: {e}")
+                    else:
+                        content_list.append(
+                            {"text": "[INFO: Image file, content not included (use --include-images)]"}
+                        )
+                        # Add original file size even if not included for context
+                        total_size += file_size
+                else: # Text file
+                    content = file_path.read_text(encoding="utf-8", errors="replace")
+                    content_list.append({"text": content})
+                    total_size += file_size
 
         except PermissionError:
-            content_parts.append("[ERROR: Permission denied]")
-            errors.append(f"Permission denied reading file: {file}")
+            content_list.append({"text": "[ERROR: Permission denied]"})
+            errors.append(f"Permission denied reading file: {file_path}")
         except Exception as e:
-            content_parts.append(f"[ERROR: {e}]")
-            errors.append(f"Error reading file {file}: {e}")
+            content_list.append({"text": f"[ERROR: {e}]"})
+            errors.append(f"Error processing file {file_path}: {e}")
 
-        content_parts.append("")
+        content_list.append({"text": ""})  # Separator after each file's content or error
 
     # Add errors summary if any
     if errors:
-        content_parts.append(FILE_SEPARATOR)
-        content_parts.append("Errors encountered:")
+        content_list.append({"text": FILE_SEPARATOR})
+        content_list.append({"text": "Errors encountered:"})
         for error in errors:
-            content_parts.append(f"- {error}")
+            content_list.append({"text": f"- {error}"})
 
-    return "\n".join(content_parts), total_size
+    return content_list, total_size

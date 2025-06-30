@@ -1,6 +1,6 @@
 # Consult7 MCP Server
 
-**Consult7** is a Model Context Protocol (MCP) server that enables AI agents to consult large context window models for analyzing extensive file collections - entire codebases, document repositories, or mixed content that exceed the current agent's context limits. Supports providers *Openrouter*, *OpenAI*, and *Google*.
+**Consult7** is a Model Context Protocol (MCP) server that enables AI agents to consult large context window models for analyzing extensive file collections - entire codebases, document repositories, or mixed content that exceed the current agent's context limits. Supports providers *Openrouter*, *OpenAI*, *Google*, and **custom OpenAI-compatible endpoints**.
 
 ## Why Consult7?
 
@@ -69,9 +69,27 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
-Replace `openrouter` with your provider choice (`google` or `openai`) and `your-api-key` with your actual API key.
+Replace `openrouter` with your provider choice (`google`, `openai`, or custom provider) and `your-api-key` with your actual API key.
 
 No installation required - `uvx` automatically downloads and runs consult7 in an isolated environment.
+
+### Custom Providers
+
+**New!** Add any OpenAI-compatible API endpoint (Groq, Anyscale, local LLMs, etc.) via configuration:
+
+```bash
+# Create config file
+mkdir -p ~/.config/consult7
+cp providers.yaml ~/.config/consult7/providers.yaml
+
+# Set API keys
+export GROQ_API_KEY="your-groq-key"
+
+# Use custom provider
+claude mcp add -s user consult7-groq uvx -- consult7 groq env:GROQ_API_KEY
+```
+
+See [Custom Providers Guide](docs/CUSTOM_PROVIDERS.md) for complete setup instructions.
 
 
 ## Command Line Options

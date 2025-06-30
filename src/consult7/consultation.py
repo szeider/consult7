@@ -8,6 +8,7 @@ from .constants import DEFAULT_CONTEXT_LENGTH, LLM_CALL_TIMEOUT
 from .file_processor import discover_files, format_content
 from .token_utils import estimate_tokens, parse_model_thinking
 from .providers import PROVIDERS
+from .exceptions import FeatureNotSupportedError
 
 logger = logging.getLogger("consult7")
 
@@ -153,6 +154,8 @@ async def consultation_impl(
                 thinking_mode,
                 custom_thinking,
             )
+    except FeatureNotSupportedError as e:
+        return f"Error: {e}. Try without thinking mode or use a different provider that supports this feature."
     except asyncio.TimeoutError:
         return f"Error: Request timed out after {LLM_CALL_TIMEOUT} seconds. Try using fewer files or a smaller query.\n\nCollected {len(files)} files ({total_size:,} bytes){token_info}"
 

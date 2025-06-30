@@ -18,6 +18,9 @@ dependencies = [
     "httpx>=0.28.1",
     "google-genai>=1.19.0",
     "openai>=1.88.0",
+    "PyYAML>=6.0",
+    "pydantic>=2.0.0",
+    "platformdirs>=4.0.0",
 ]
 
 [project.urls]

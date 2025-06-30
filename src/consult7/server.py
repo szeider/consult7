@@ -33,16 +33,28 @@ class Consult7Server(Server):
 
 async def test_api_connection(server: Consult7Server):
     """Test the API connection with a simple query."""
-    print(f"\nTesting {server.provider} API connection...")
-    print(f"API Key: {'Set' if server.api_key else 'Not set'}")
+    print(f"\nTesting {server.provider} API connection...", file=sys.stderr)
+    print(f"API Key: {'Set' if server.api_key else 'Not set'}", file=sys.stderr)
 
     if not server.api_key:
-        print("\nError: No API key provided!")
-        print("Use --api-key flag")
+        print("\nError: No API key provided!", file=sys.stderr)
+        print("Use --api-key flag", file=sys.stderr)
         return False
 
     # Use a default test model for each provider
-    test_model = TEST_MODELS.get(server.provider, TEST_MODELS["openrouter"])
+    test_model = TEST_MODELS.get(server.provider)
+    
+    # For custom providers, use the first available model
+    if not test_model:
+        provider_instance = PROVIDERS.get(server.provider)
+        if provider_instance and hasattr(provider_instance, 'config'):
+            if provider_instance.config.models:
+                test_model = provider_instance.config.models[0].name
+            else:
+                print(f"\nError: No models configured for custom provider '{server.provider}'", file=sys.stderr)
+                return False
+        else:
+            test_model = TEST_MODELS["openrouter"]  # Fallback
 
     # Simple test query
     test_content = "This is a test file with sample content."
@@ -51,7 +63,7 @@ async def test_api_connection(server: Consult7Server):
     # Call appropriate provider
     provider_instance = PROVIDERS.get(server.provider)
     if not provider_instance:
-        print(f"\nError: Unknown provider '{server.provider}'")
+        print(f"\nError: Unknown provider '{server.provider}'", file=sys.stderr)
         return False
 
     response, error, _ = await provider_instance.call_llm(
@@ -59,11 +71,11 @@ async def test_api_connection(server: Consult7Server):
     )
 
     if error:
-        print(f"\nError: {error}")
+        print(f"\nError: {error}", file=sys.stderr)
         return False
 
-    print(f"\nSuccess! Response from {test_model} ({server.provider}):")
-    print(response)
+    print(f"\nSuccess! Response from {test_model} ({server.provider}):", file=sys.stderr)
+    print(response, file=sys.stderr)
     return True
 
 
@@ -80,31 +92,32 @@ async def main():
 
     # Validate arguments
     if len(args) < MIN_ARGS:
-        print("Error: Missing required arguments")
-        print("Usage: consult7 <provider> <api-key> [--test]")
-        print()
-        print("Providers: openrouter, google, openai")
-        print()
-        print("Examples:")
-        print("  consult7 openrouter sk-or-v1-...")
-        print("  consult7 google AIza...")
-        print("  consult7 openai sk-proj-...")
-        print("  consult7 openrouter sk-or-v1-... --test")
+        print("Error: Missing required arguments", file=sys.stderr)
+        print("Usage: consult7 <provider> <api-key> [--test]", file=sys.stderr)
+        print(file=sys.stderr)
+        print("Examples:", file=sys.stderr)
+        print("  consult7 openrouter sk-or-v1-...", file=sys.stderr)
+        print("  consult7 google AIza...", file=sys.stderr)
+        print("  consult7 openai sk-proj-...", file=sys.stderr)
+        print("  consult7 groq gsk_... --test", file=sys.stderr)
+        print("  consult7 openrouter sk-or-v1-... --test", file=sys.stderr)
         sys.exit(EXIT_FAILURE)
 
     if len(args) > MIN_ARGS:
-        print(f"Error: Too many arguments. Expected {MIN_ARGS}, got {len(args)}")
-        print("Usage: consult7 <provider> <api-key> [--test]")
+        print(f"Error: Too many arguments. Expected {MIN_ARGS}, got {len(args)}", file=sys.stderr)
+        print("Usage: consult7 <provider> <api-key> [--test]", file=sys.stderr)
         sys.exit(EXIT_FAILURE)
 
     # Parse provider and api key
     provider = args[0]
     api_key = args[1]
 
-    # Validate provider
-    if provider not in ["openrouter", "google", "openai"]:
-        print(f"Error: Invalid provider '{provider}'")
-        print("Valid providers: openrouter, google, openai")
+    # Validate provider (dynamic validation)
+    from .providers import PROVIDERS
+    if provider not in PROVIDERS.keys():
+        available = ", ".join(sorted(PROVIDERS.keys()))
+        print(f"Error: Invalid provider '{provider}'", file=sys.stderr)
+        print(f"Valid providers: {available}", file=sys.stderr)
         sys.exit(1)
 
     # Create server with stored configuration

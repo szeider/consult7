@@ -1,0 +1,64 @@
+# Example configuration for custom OpenAI-compatible providers
+# Security-first: API keys via environment variables only
+
+custom_providers:
+  # - name: "groq"
+  #   display_name: "Groq"
+  #   api_base_url: "https://api.groq.com/openai/v1"
+  #   
+  #   authentication:
+  #     type: "bearer_token"
+  #     api_key_env: "GROQ_API_KEY"  # Environment variable name
+  #   
+  #   feature_support:
+  #     tool_calling: true
+  #     json_mode: true
+  #     streaming: true
+  #     thinking_mode: false
+  #   
+  #   # Global parameter overrides for all models
+  #   parameter_overrides:
+  #     temperature: 0.2
+  #   
+  #   models:
+  #     - name: "llama3-8b-8192"
+  #       context_length: 8192
+  #       max_output_tokens: 4096
+  #       # Model-specific parameter overrides
+  #       parameter_overrides:
+  #         top_p: 0.9
+  #     - name: "gemma-7b-it"
+  #       context_length: 8192
+  #       max_output_tokens: 4096
+
+  # - name: "anyscale"
+  #   display_name: "Anyscale Endpoints"
+  #   api_base_url: "https://api.endpoints.anyscale.com/v1"
+  #   authentication:
+  #     type: "bearer_token"
+  #     api_key_env: "ANYSCALE_API_KEY"
+  #   feature_support:
+  #     tool_calling: false  # Example: provider doesn't support tools
+  #     json_mode: true
+  #     streaming: true
+  #     thinking_mode: false
+  #   models:
+  #     - name: "meta-llama/Llama-3-8B-Instruct"
+  #       context_length: 8192
+  #       max_output_tokens: 4096
+
+  - name: "github-copilot"
+    display_name: "GitHub Copilot"
+    api_base_url: "https://api.githubcopilot.com"
+    authentication:
+      type: "bearer_token"
+      api_key_env: "GITHUB_COPILOT_API_KEY"
+    feature_support:
+      tool_calling: true      # GitHub Copilot supports function calling
+      json_mode: true         # Supports structured outputs
+      streaming: true         # Supports streaming responses  
+      thinking_mode: false    # Does not support reasoning mode
+    models:
+      - name: "gemini-2.5-pro"
+        context_length: 1000000   # 1M context window
+        max_output_tokens: 8192   # Standard output limit

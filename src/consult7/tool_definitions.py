@@ -57,6 +57,10 @@ Notes:
     def get_model_parameter_description(cls, provider: str) -> str:
         """Get the model parameter description with provider-specific examples."""
         examples = cls.MODEL_EXAMPLES.get(provider, [])
+        
+        # For custom providers, generate examples from configuration
+        if not examples and provider not in cls.MODEL_EXAMPLES:
+            examples = cls._get_custom_provider_examples(provider)
 
         if provider == "openai":
             model_desc = (
@@ -120,4 +124,39 @@ Notes:
                 "Advanced: For custom limits, use |thinking=30000"
             )
         else:
-            return "Note: Model context windows are auto-detected from the API"
+            # For custom providers, check if they support thinking mode
+            from .providers import PROVIDERS
+            if provider in PROVIDERS:
+                provider_instance = PROVIDERS[provider]
+                if hasattr(provider_instance, 'config') and hasattr(provider_instance.config, 'feature_support'):
+                    if provider_instance.config.feature_support.thinking_mode:
+                        return "Thinking Mode: Add |thinking suffix for deeper analysis (if supported)"
+                    else:
+                        return f"Custom provider: {provider_instance.config.display_name}"
+            return "Note: Model context windows are auto-detected or configured"
+    
+    @classmethod
+    def _get_custom_provider_examples(cls, provider: str) -> list:
+        """Generate model examples for custom providers from their configuration."""
+        examples = []
+        
+        try:
+            from .providers import PROVIDERS
+            if provider in PROVIDERS:
+                provider_instance = PROVIDERS[provider]
+                if hasattr(provider_instance, 'config'):
+                    config = provider_instance.config
+                    for model in config.models[:3]:  # Limit to first 3 models
+                        context_str = f"{model.context_length // 1000}k" if model.context_length >= 1000 else str(model.context_length)
+                        example = f'"{model.name}" ({context_str} context)'
+                        examples.append(example)
+                        
+                        # Add thinking mode example if supported
+                        if config.feature_support.thinking_mode:
+                            examples.append(f'"{model.name}|thinking" (with reasoning mode)')
+                            break  # Only show one thinking example
+        except Exception:
+            # Fallback if anything goes wrong
+            examples = [f'"model-name" (configured via {provider} provider)']
+        
+        return examples if examples else [f'"model-name" (configured via {provider} provider)']

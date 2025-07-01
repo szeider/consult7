@@ -1,7 +1,6 @@
 """Configuration module for Consult7."""
 
 from .models import (
-    AuthenticationConfig,
     FeatureSupportConfig,
     ModelConfig,
     CustomProviderConfig,
@@ -9,9 +8,9 @@ from .models import (
 from .loader import ConfigLoader
 
 __all__ = [
-    "AuthenticationConfig",
-    "FeatureSupportConfig", 
+    "FeatureSupportConfig",
     "ModelConfig",
     "CustomProviderConfig",
     "ConfigLoader",
 ]
+

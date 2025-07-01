@@ -43,7 +43,7 @@ async def test_api_connection(server: Consult7Server):
 
     # Use a default test model for each provider
     test_model = TEST_MODELS.get(server.provider)
-    
+
     # For custom providers, use the first available model
     if not test_model:
         provider_instance = PROVIDERS.get(server.provider)

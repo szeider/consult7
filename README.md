@@ -75,21 +75,54 @@ No installation required - `uvx` automatically downloads and runs consult7 in an
 
 ### Custom Providers
 
-**New!** Add any OpenAI-compatible API endpoint (Groq, Anyscale, local LLMs, etc.) via configuration:
+**New!** Add any OpenAI-compatible API endpoint (GitHub Copilot, Groq, Anyscale, local LLMs, etc.) via configuration:
 
-```bash
-# Create config file
-mkdir -p ~/.config/consult7
-cp providers.yaml ~/.config/consult7/providers.yaml
+1. Create a `providers.yaml` file in your project root:
 
-# Set API keys
-export GROQ_API_KEY="your-groq-key"
-
-# Use custom provider
-claude mcp add -s user consult7-groq uvx -- consult7 groq env:GROQ_API_KEY
+```yaml
+custom_providers:
+  - name: "github-copilot"
+    display_name: "GitHub Copilot"
+    api_base_url: "https://api.githubcopilot.com"
+    feature_support:
+      tool_calling: true
+      json_mode: true
+      streaming: true
+      thinking_mode: false
+    models:
+      - name: "gemini-2.5-pro"
+        context_length: 1000000
+        max_output_tokens: 8192
+      - name: "gpt-4.1"
+        context_length: 1000000
+        max_output_tokens: 8192
 ```
 
-See [Custom Providers Guide](docs/CUSTOM_PROVIDERS.md) for complete setup instructions.
+2. Use the custom provider:
+
+```bash
+# With uv run (for development)
+uv run consult7 github-copilot your-api-key --test
+
+# With Claude Desktop
+{
+  "mcpServers": {
+    "consult7-github-copilot": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/path/to/your/project",
+        "consult7",
+        "github-copilot",
+        "YOUR_API_KEY"
+      ]
+    }
+  }
+}
+```
+
+See `providers.example.yaml` for more configuration examples including Groq, parameter overrides, and model-specific settings.
 
 
 ## Command Line Options
@@ -98,7 +131,7 @@ See [Custom Providers Guide](docs/CUSTOM_PROVIDERS.md) for complete setup instru
 uvx consult7 <provider> <api-key> [--test]
 ```
 
-- `<provider>`: Required. Choose from `openrouter`, `google`, or `openai`
+- `<provider>`: Required. Choose from `openrouter`, `google`, `openai`, or any custom provider defined in `providers.yaml`
 - `<api-key>`: Required. Your API key for the chosen provider
 - `--test`: Optional. Test the API connection
 

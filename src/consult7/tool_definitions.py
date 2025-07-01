@@ -57,7 +57,7 @@ Notes:
     def get_model_parameter_description(cls, provider: str) -> str:
         """Get the model parameter description with provider-specific examples."""
         examples = cls.MODEL_EXAMPLES.get(provider, [])
-        
+
         # For custom providers, generate examples from configuration
         if not examples and provider not in cls.MODEL_EXAMPLES:
             examples = cls._get_custom_provider_examples(provider)
@@ -134,12 +134,12 @@ Notes:
                     else:
                         return f"Custom provider: {provider_instance.config.display_name}"
             return "Note: Model context windows are auto-detected or configured"
-    
+
     @classmethod
     def _get_custom_provider_examples(cls, provider: str) -> list:
         """Generate model examples for custom providers from their configuration."""
         examples = []
-        
+
         try:
             from .providers import PROVIDERS
             if provider in PROVIDERS:
@@ -150,7 +150,7 @@ Notes:
                         context_str = f"{model.context_length // 1000}k" if model.context_length >= 1000 else str(model.context_length)
                         example = f'"{model.name}" ({context_str} context)'
                         examples.append(example)
-                        
+
                         # Add thinking mode example if supported
                         if config.feature_support.thinking_mode:
                             examples.append(f'"{model.name}|thinking" (with reasoning mode)')
@@ -158,5 +158,5 @@ Notes:
         except Exception:
             # Fallback if anything goes wrong
             examples = [f'"model-name" (configured via {provider} provider)']
-        
+
         return examples if examples else [f'"model-name" (configured via {provider} provider)']

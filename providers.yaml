@@ -1,0 +1,60 @@
+# Example configuration for custom OpenAI-compatible providers
+# API keys are passed via command line like built-in providers
+
+custom_providers:
+  - name: "github-copilot"
+    display_name: "GitHub Copilot"
+    api_base_url: "https://api.githubcopilot.com"
+    feature_support:
+      tool_calling: true      # GitHub Copilot supports function calling
+      json_mode: true         # Supports structured outputs
+      streaming: true         # Supports streaming responses  
+      thinking_mode: false    # Does not support reasoning mode
+    models:
+      - name: "gemini-2.5-pro"
+        context_length: 1000000   # 1M context window
+        max_output_tokens: 8192   # Standard output limit
+      - name: "gpt-4.1"
+        context_length: 1000000
+        max_output_tokens: 4096
+      - name: "o3-mini"
+        context_length: 200000
+        max_output_tokens: 65536
+
+  # - name: "groq"
+  #   display_name: "Groq"
+  #   api_base_url: "https://api.groq.com/openai/v1"
+  #   
+  #   feature_support:
+  #     tool_calling: true
+  #     json_mode: true
+  #     streaming: true
+  #     thinking_mode: false
+  #   
+  #   # Global parameter overrides for all models
+  #   parameter_overrides:
+  #     temperature: 0.2
+  #   
+  #   models:
+  #     - name: "llama3-8b-8192"
+  #       context_length: 8192
+  #       max_output_tokens: 4096
+  #       # Model-specific parameter overrides
+  #       parameter_overrides:
+  #         top_p: 0.9
+  #     - name: "gemma-7b-it"
+  #       context_length: 8192
+  #       max_output_tokens: 4096
+
+  # - name: "anyscale"
+  #   display_name: "Anyscale Endpoints"
+  #   api_base_url: "https://api.endpoints.anyscale.com/v1"
+  #   feature_support:
+  #     tool_calling: false  # Example: provider doesn't support tools
+  #     json_mode: true
+  #     streaming: true
+  #     thinking_mode: false
+  #   models:
+  #     - name: "meta-llama/Llama-3-8B-Instruct"
+  #       context_length: 8192
+  #       max_output_tokens: 4096

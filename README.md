@@ -1,6 +1,6 @@
 # Consult7 MCP Server
 
-**Consult7** is a Model Context Protocol (MCP) server that enables AI agents to consult large context window models for analyzing extensive file collections - entire codebases, document repositories, or mixed content that exceed the current agent's context limits. Supports providers *Openrouter*, *OpenAI*, and *Google*.
+**Consult7** is a Model Context Protocol (MCP) server that enables AI agents to consult large context window models for analyzing extensive file collections - entire codebases, document repositories, or mixed content that exceed the current agent's context limits. Supports providers *Openrouter*, *OpenAI*, *Google*, and **custom OpenAI-compatible endpoints**.
 
 ## Why Consult7?
 
@@ -69,9 +69,60 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
-Replace `openrouter` with your provider choice (`google` or `openai`) and `your-api-key` with your actual API key.
+Replace `openrouter` with your provider choice (`google`, `openai`, or custom provider) and `your-api-key` with your actual API key.
 
 No installation required - `uvx` automatically downloads and runs consult7 in an isolated environment.
+
+### Custom Providers
+
+**New!** Add any OpenAI-compatible API endpoint (GitHub Copilot, Groq, Anyscale, local LLMs, etc.) via configuration:
+
+1. Create a `providers.yaml` file in your project root:
+
+```yaml
+custom_providers:
+  - name: "github-copilot"
+    display_name: "GitHub Copilot"
+    api_base_url: "https://api.githubcopilot.com"
+    feature_support:
+      tool_calling: true
+      json_mode: true
+      streaming: true
+      thinking_mode: false
+    models:
+      - name: "gemini-2.5-pro"
+        context_length: 1000000
+        max_output_tokens: 8192
+      - name: "gpt-4.1"
+        context_length: 1000000
+        max_output_tokens: 8192
+```
+
+2. Use the custom provider:
+
+```bash
+# With uv run (for development)
+uv run consult7 github-copilot your-api-key --test
+
+# With Claude Desktop
+{
+  "mcpServers": {
+    "consult7-github-copilot": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/path/to/your/project",
+        "consult7",
+        "github-copilot",
+        "YOUR_API_KEY"
+      ]
+    }
+  }
+}
+```
+
+See `providers.example.yaml` for more configuration examples including Groq, parameter overrides, and model-specific settings.
 
 
 ## Command Line Options
@@ -80,7 +131,7 @@ No installation required - `uvx` automatically downloads and runs consult7 in an
 uvx consult7 <provider> <api-key> [--test]
 ```
 
-- `<provider>`: Required. Choose from `openrouter`, `google`, or `openai`
+- `<provider>`: Required. Choose from `openrouter`, `google`, `openai`, or any custom provider defined in `providers.yaml`
 - `<api-key>`: Required. Your API key for the chosen provider
 - `--test`: Optional. Test the API connection
 

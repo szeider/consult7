@@ -46,3 +46,7 @@ TEST_MODELS = {
     "google": "gemini-2.0-flash-exp",
     "openai": "gpt-4o-mini|128k",
 }
+
+# Configuration paths and discovery
+CONFIG_FILE_NAME = "providers.yaml"
+CONFIG_DIR_NAME = "consult7"

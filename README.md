@@ -10,31 +10,30 @@ When working with AI agents that have limited context windows (like Claude with 
 
 ## How it works
 
-**Consult7** recursively collects all files from a given path that match your regex pattern (including all subdirectories), assembles them into a single context, and sends them to a large context window model along with your query. The result of this query is directly fed back to the agent you are working with.
+**Consult7** collects files from the specific paths you provide (with optional wildcards in filenames), assembles them into a single context, and sends them to a large context window model along with your query. The result is directly fed back to the agent you are working with.
 
 ## Example Use Cases
 
 ### Summarize an entire codebase
+
+* **Files:** `["/Users/john/project/src/*.py", "/Users/john/project/lib/*.py"]`
 * **Query:** "Summarize the architecture and main components of this Python project"
-* **Pattern:** `".*\.py$"` (all Python files)
-* **Path:** `/Users/john/my-python-project`
+* **Model:** `"gemini-2.5-flash"`
 
 ### Find specific method definitions
-
+* **Files:** `["/Users/john/backend/src/*.py", "/Users/john/backend/auth/*.js"]`
 * **Query:** "Find the implementation of the authenticate_user method and explain how it handles password verification"
-* **Pattern:** `".*\.(py|js|ts)$"` (Python, JavaScript, TypeScript files)
-* **Path:** `/Users/john/backend`
+* **Model:** `"gemini-2.5-pro"`
 
 ### Analyze test coverage
+* **Files:** `["/Users/john/project/tests/*_test.py", "/Users/john/project/src/*.py"]`
 * **Query:** "List all the test files and identify which components lack test coverage"
-* **Pattern:** `".*test.*\.py$|.*_test\.py$"` (test files)
-* **Path:** `/Users/john/project`
+* **Model:** `"gemini-2.5-flash"`
 
 ### Complex analysis with thinking mode
+* **Files:** `["/Users/john/webapp/src/*.py", "/Users/john/webapp/auth/*.py", "/Users/john/webapp/api/*.js"]`
 * **Query:** "Analyze the authentication flow across this codebase. Think step by step about security vulnerabilities and suggest improvements"
-* **Pattern:** `".*\.(py|js|ts)$"`
 * **Model:** `"gemini-2.5-flash|thinking"`
-* **Path:** `/Users/john/webapp`
 
 ## Installation
 
@@ -91,20 +90,20 @@ The model is specified when calling the tool, not at startup. The server shows e
 #### Google
 Standard models:
 - `"gemini-2.5-flash"` - Fast model
-- `"gemini-2.5-flash-lite-preview-06-17"` - Ultra fast lite model
+- `"gemini-2.5-flash-lite"` - Ultra fast lite model
 - `"gemini-2.5-pro"` - Intelligent model
 - `"gemini-2.0-flash-exp"` - Experimental model
 
 With thinking mode (add `|thinking` suffix):
 - `"gemini-2.5-flash|thinking"` - Fast with deep reasoning
-- `"gemini-2.5-flash-lite-preview-06-17|thinking"` - Ultra fast with deep reasoning
+- `"gemini-2.5-flash-lite|thinking"` - Ultra fast with deep reasoning
 - `"gemini-2.5-pro|thinking"` - Intelligent with deep reasoning
 
 #### OpenRouter
 Standard models:
 - `"google/gemini-2.5-pro"` - Intelligent, 1M context
 - `"google/gemini-2.5-flash"` - Fast, 1M context
-- `"google/gemini-2.5-flash-lite-preview-06-17"` - Ultra fast, 1M context
+- `"google/gemini-2.5-flash-lite"` - Ultra fast, 1M context
 - `"anthropic/claude-sonnet-4"` - Claude Sonnet, 200k context
 - `"anthropic/claude-opus-4.1"` - Claude Opus 4.1, 200k context
 - `"openai/gpt-5"` - GPT-5, 400k context
@@ -113,7 +112,7 @@ Standard models:
 With reasoning mode (add `|thinking` suffix):
 - `"anthropic/claude-sonnet-4|thinking"` - Claude with 31,999 reasoning tokens
 - `"anthropic/claude-opus-4.1|thinking"` - Opus 4.1 with reasoning
-- `"google/gemini-2.5-flash-lite-preview-06-17|thinking"` - Ultra fast with reasoning
+- `"google/gemini-2.5-flash-lite|thinking"` - Ultra fast with reasoning
 - `"openai/gpt-5|thinking"` - GPT-5 with reasoning
 - `"openai/gpt-4.1|thinking"` - GPT-4.1 with reasoning effort=high
 
@@ -134,6 +133,34 @@ O-series models with |thinking marker:
 **Note:** For OpenAI, |thinking is only supported on o-series models and serves as an informational marker. The models use reasoning tokens automatically.
 
 **Advanced:** You can specify custom thinking tokens with `|thinking=30000` but this is rarely needed. 
+
+## File Specification Rules
+
+When using the consultation tool, you provide a list of file paths with these rules:
+
+1. **All paths must be absolute** (start with `/`)
+   - ✅ Good: `/Users/john/project/src/*.py`
+   - ❌ Bad: `src/*.py` or `./src/*.py`
+
+2. **Wildcards (`*`) only allowed in filenames**, not in directory paths
+   - ✅ Good: `/Users/john/project/*.py`
+   - ❌ Bad: `/Users/*/project/*.py` or `/Users/john/**/*.py`
+
+3. **Must specify extension when using wildcards**
+   - ✅ Good: `/Users/john/project/*.py`
+   - ❌ Bad: `/Users/john/project/*`
+
+4. **Mix specific files and patterns freely**
+   - ✅ Good: `["/path/src/*.py", "/path/README.md", "/path/tests/*_test.py"]`
+
+5. **Common patterns:**
+   - All Python files in a directory: `/path/to/dir/*.py`
+   - Test files: `/path/to/tests/*_test.py` or `/path/to/tests/test_*.py`
+   - Multiple extensions: Use multiple patterns like `["/path/*.js", "/path/*.ts"]`
+
+The tool automatically ignores: `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`
+
+**Size limits:** 1MB per file, 4MB total (optimized for ~1M token context windows)
 
 ## Testing
 

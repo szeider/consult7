@@ -18,7 +18,7 @@ from .consultation import consultation_impl
 logger = logging.getLogger("consult7")
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stderr)
-handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
 logger.addHandler(handler)
 
 
@@ -116,19 +116,14 @@ async def main():
         return [
             types.Tool(
                 name="consultation",
-                description=ToolDescriptions.get_consultation_tool_description(
-                    server.provider
-                ),
+                description=ToolDescriptions.get_consultation_tool_description(server.provider),
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": ToolDescriptions.get_path_description(),
-                        },
-                        "pattern": {
-                            "type": "string",
-                            "description": ToolDescriptions.get_pattern_description(),
+                        "files": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": ToolDescriptions.get_files_description(),
                         },
                         "query": {
                             "type": "string",
@@ -136,16 +131,12 @@ async def main():
                         },
                         "model": {
                             "type": "string",
-                            "description": ToolDescriptions.get_model_parameter_description(
-                                server.provider
+                            "description": (
+                                ToolDescriptions.get_model_parameter_description(server.provider)
                             ),
                         },
-                        "exclude_pattern": {
-                            "type": "string",
-                            "description": ToolDescriptions.get_exclude_pattern_description(),
-                        },
                     },
-                    "required": ["path", "pattern", "query", "model"],
+                    "required": ["files", "query", "model"],
                 },
             )
         ]
@@ -156,33 +147,24 @@ async def main():
         try:
             if name == "consultation":
                 result = await consultation_impl(
-                    arguments["path"],
-                    arguments["pattern"],
+                    arguments["files"],
                     arguments["query"],
                     arguments["model"],
-                    arguments.get("exclude_pattern"),
                     server.provider,
                     server.api_key,
                 )
                 return [types.TextContent(type="text", text=result)]
             else:
-                return [
-                    types.TextContent(type="text", text=f"Error: Unknown tool '{name}'")
-                ]
+                return [types.TextContent(type="text", text=f"Error: Unknown tool '{name}'")]
         except Exception as e:
             # Log the full error for debugging
             logger.error(f"Error in {name}: {type(e).__name__}: {str(e)}")
 
             # Simple error message mapping
             error_str = str(e).lower()
-            if any(
-                x in error_str
-                for x in ["connection", "network", "timeout", "unreachable"]
-            ):
+            if any(x in error_str for x in ["connection", "network", "timeout", "unreachable"]):
                 error_msg = "Network error. Please check your internet connection."
-            elif any(
-                x in error_str for x in ["unauthorized", "401", "403", "invalid api"]
-            ):
+            elif any(x in error_str for x in ["unauthorized", "401", "403", "invalid api"]):
                 error_msg = "Invalid API key. Please check your credentials."
             elif any(x in error_str for x in ["rate limit", "429", "quota"]):
                 error_msg = "Rate limit exceeded. Please wait and try again."

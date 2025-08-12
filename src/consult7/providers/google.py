@@ -3,17 +3,6 @@
 import logging
 from typing import Optional, Tuple
 
-logger = logging.getLogger("consult7")
-
-# Provider-specific imports will be done conditionally
-try:
-    from google import genai
-    from google.genai import types as genai_types
-
-    GOOGLE_AVAILABLE = True
-except ImportError:
-    GOOGLE_AVAILABLE = False
-
 from .base import BaseProvider, process_llm_response
 from ..constants import (
     DEFAULT_CONTEXT_LENGTH,
@@ -26,6 +15,17 @@ from ..token_utils import (
     parse_model_thinking,
     get_thinking_budget,
 )
+
+logger = logging.getLogger("consult7")
+
+# Provider-specific imports will be done conditionally
+try:
+    from google import genai
+    from google.genai import types as genai_types
+
+    GOOGLE_AVAILABLE = True
+except ImportError:
+    GOOGLE_AVAILABLE = False
 
 
 class GoogleProvider(BaseProvider):
@@ -93,7 +93,10 @@ class GoogleProvider(BaseProvider):
             return "", str(e), None
 
         # Estimate tokens for the input
-        system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
+        system_msg = (
+            "You are a helpful assistant analyzing code and files. "
+            "Be concise and specific in your responses."
+        )
         user_msg = f"Here are the files to analyze:\n\n{content}\n\nQuery: {query}"
         total_input = system_msg + user_msg
         estimated_tokens = estimate_tokens(total_input)
@@ -111,12 +114,14 @@ class GoogleProvider(BaseProvider):
             if thinking_budget_actual is None:
                 thinking_mode = False
                 thinking_budget_actual = 0
-                unknown_model_msg = f"\nNote: Unknown model '{actual_model}' requires thinking=X parameter for thinking mode. Example: {actual_model}|thinking=30000"
+                unknown_model_msg = (
+                    f"\nNote: Unknown model '{actual_model}' requires thinking=X "
+                    f"parameter for thinking mode. Example: {actual_model}|thinking=30000"
+                )
 
         # Calculate available input space with thinking reserved upfront
         available_for_input = int(
-            (context_length - max_output_tokens - thinking_budget_actual)
-            * TOKEN_SAFETY_FACTOR
+            (context_length - max_output_tokens - thinking_budget_actual) * TOKEN_SAFETY_FACTOR
         )
 
         # Check against adjusted limit
@@ -131,11 +136,12 @@ class GoogleProvider(BaseProvider):
                     return (
                         "",
                         (
-                            f"Content too large for model: ~{estimated_tokens:,} tokens estimated, "
-                            f"but model {actual_model} has only ~{available_without_thinking:,} tokens available "
-                            f"even without thinking mode "
-                            f"(context: {context_length:,}, output: {max_output_tokens:,}). "
-                            f"Try reducing file count/size or using a model with larger context."
+                            f"Content too large for model: ~{estimated_tokens:,} tokens "
+                            f"estimated, but model {actual_model} has only "
+                            f"~{available_without_thinking:,} tokens available even without "
+                            f"thinking mode (context: {context_length:,}, "
+                            f"output: {max_output_tokens:,}). Try reducing file count/size "
+                            f"or using a model with larger context."
                         ),
                         0,
                     )

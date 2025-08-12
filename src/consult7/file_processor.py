@@ -1,9 +1,9 @@
 """File discovery, formatting, and utilities for Consult7."""
 
 import os
-import re
+import glob
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Tuple, List
 
 from .constants import DEFAULT_IGNORED, MAX_FILE_SIZE, MAX_TOTAL_SIZE, FILE_SEPARATOR
 
@@ -17,86 +17,67 @@ def should_ignore_path(path: Path) -> bool:
     return False
 
 
-def discover_files(
-    base_path: str, pattern: str, exclude_pattern: Optional[str] = None
-) -> Tuple[List[Path], List[str]]:
-    """Discover files matching the pattern.
+def expand_file_patterns(file_patterns: List[str]) -> Tuple[List[Path], List[str]]:
+    """Expand file patterns into actual file paths.
 
     Args:
-        base_path: Base directory to search from
-        pattern: Regex pattern to match files
-        exclude_pattern: Optional regex pattern to exclude files
+        file_patterns: List of file paths/patterns (wildcards allowed only in filename)
 
     Returns:
         Tuple of (matching_files, errors)
     """
     errors = []
-    matching_files = []
+    matching_files = set()  # Use set to avoid duplicates
 
-    try:
-        base = Path(base_path).resolve()
-        if not base.exists():
-            errors.append(f"Path does not exist: {base_path}")
-            return [], errors
-
-        if not base.is_dir():
-            errors.append(f"Path is not a directory: {base_path}")
-            return [], errors
-
-        # Compile regex patterns
+    for pattern in file_patterns:
         try:
-            include_re = re.compile(pattern)
-        except re.error as e:
-            errors.append(f"Invalid include pattern '{pattern}': {e}")
-            return [], errors
+            # Validate absolute path
+            if not os.path.isabs(pattern):
+                errors.append(f"Path must be absolute: {pattern}")
+                continue
 
-        exclude_re = None
-        if exclude_pattern:
-            try:
-                exclude_re = re.compile(exclude_pattern)
-            except re.error as e:
-                errors.append(f"Invalid exclude pattern '{exclude_pattern}': {e}")
-                return [], errors
+            # Check for wildcards
+            if "*" in pattern:
+                # Ensure wildcard is only in filename portion
+                dir_part = os.path.dirname(pattern)
+                file_part = os.path.basename(pattern)
 
-        # Walk directory tree
-        for root, dirs, files in os.walk(base):
-            root_path = Path(root)
-
-            # Skip ignored directories
-            dirs[:] = [d for d in dirs if not should_ignore_path(root_path / d)]
-
-            for file in files:
-                file_path = root_path / file
-
-                # Skip ignored files
-                if should_ignore_path(file_path):
+                if "*" in dir_part:
+                    errors.append(f"Wildcards only allowed in filename, not path: {pattern}")
                     continue
 
-                # Check include pattern
-                if not include_re.match(file):
+                # Ensure extension is specified
+                if "." not in file_part.split("*")[-1]:
+                    errors.append(f"Extension must be specified with wildcards: {pattern}")
                     continue
 
-                # Check exclude pattern
-                if exclude_re and exclude_re.match(file):
-                    continue
+                # Use glob to expand
+                expanded = glob.glob(pattern)
+                for file_path in expanded:
+                    path_obj = Path(file_path)
+                    if path_obj.is_file() and not should_ignore_path(path_obj):
+                        matching_files.add(path_obj)
+            else:
+                # Specific file path
+                path_obj = Path(pattern)
+                if path_obj.exists():
+                    if path_obj.is_dir():
+                        errors.append(f"Directory provided, must specify files: {pattern}")
+                    elif not should_ignore_path(path_obj):
+                        matching_files.add(path_obj)
+                else:
+                    errors.append(f"File does not exist: {pattern}")
 
-                matching_files.append(file_path)
+        except Exception as e:
+            errors.append(f"Error processing pattern '{pattern}': {e}")
 
-    except PermissionError as e:
-        errors.append(f"Permission denied: {e}")
-    except Exception as e:
-        errors.append(f"Error during file discovery: {e}")
-
-    return matching_files, errors
+    return sorted(list(matching_files)), errors
 
 
-def format_content(
-    base_path: str, files: List[Path], errors: List[str]
-) -> Tuple[str, int]:
+def format_content(files: List[Path], errors: List[str]) -> Tuple[str, int]:
     """Format files into text content.
 
     Args:
-        base_path: Base directory for relative paths
         files: List of file paths to format
         errors: List to append errors to
 
@@ -107,37 +88,28 @@ def format_content(
     total_size = 0
 
     # Add capacity information
-    content_parts.append(f"File Size Budget: {MAX_TOTAL_SIZE:,} bytes (100MB)")
+    content_parts.append(f"File Size Budget: {MAX_TOTAL_SIZE:,} bytes (4MB for ~1M tokens)")
     content_parts.append(f"Files Found: {len(files)}")
     content_parts.append("")
 
-    # Add directory tree
-    content_parts.append("Directory Structure:")
+    # Add file list (no tree needed since files can be from anywhere)
+    content_parts.append("Files to Process:")
     content_parts.append(FILE_SEPARATOR)
 
-    # Build simple tree structure
-    base = Path(base_path).resolve()
-    tree_lines = []
-
-    # Group files by directory
+    # Group files by directory for cleaner display
     dirs = {}
     for file in sorted(files):
-        rel_path = file.relative_to(base)
-        dir_path = rel_path.parent
+        dir_path = file.parent
         if dir_path not in dirs:
             dirs[dir_path] = []
-        dirs[dir_path].append(rel_path.name)
+        dirs[dir_path].append(file.name)
 
-    # Format tree
+    # Display grouped files
     for dir_path in sorted(dirs.keys()):
-        if str(dir_path) == ".":
-            tree_lines.append(f"{base_path}/")
-        else:
-            tree_lines.append(f"  {dir_path}/")
+        content_parts.append(f"{dir_path}/")
         for filename in sorted(dirs[dir_path]):
-            tree_lines.append(f"    - {filename}")
+            content_parts.append(f"  - {filename}")
 
-    content_parts.extend(tree_lines)
     content_parts.append("")
 
     # Add file contents

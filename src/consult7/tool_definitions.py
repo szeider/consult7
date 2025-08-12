@@ -8,26 +8,24 @@ class ToolDescriptions:
         "openrouter": [
             '"google/gemini-2.5-pro" (intelligent, 1M context)',
             '"google/gemini-2.5-flash" (fast, 1M context)',
-            '"google/gemini-2.5-flash-lite-preview-06-17" (ultra fast, 1M context)',
+            '"google/gemini-2.5-flash-lite" (ultra fast, 1M context)',
             '"anthropic/claude-sonnet-4" (Claude Sonnet, 200k context)',
             '"anthropic/claude-opus-4.1" (Claude Opus 4.1, 200k context)',
             '"openai/gpt-5" (GPT-5, 400k context)',
             '"openai/gpt-4.1" (GPT-4.1, 1M+ context)',
             '"anthropic/claude-sonnet-4|thinking" (Claude with 31,999 tokens)',
             '"anthropic/claude-opus-4.1|thinking" (Opus 4.1 with reasoning)',
-            '"google/gemini-2.5-flash-lite-preview-06-17|thinking" '
-            "(ultra fast with reasoning)",
+            '"google/gemini-2.5-flash-lite|thinking" (ultra fast with reasoning)',
             '"openai/gpt-5|thinking" (GPT-5 with reasoning)',
             '"openai/gpt-4.1|thinking" (GPT-4.1 with reasoning effort=high)',
         ],
         "google": [
             '"gemini-2.5-flash" (fast, standard mode)',
-            '"gemini-2.5-flash-lite-preview-06-17" (ultra fast, lite model)',
+            '"gemini-2.5-flash-lite" (ultra fast, lite model)',
             '"gemini-2.5-pro" (intelligent, standard mode)',
             '"gemini-2.0-flash-exp" (experimental model)',
             '"gemini-2.5-flash|thinking" (fast with deep reasoning)',
-            '"gemini-2.5-flash-lite-preview-06-17|thinking" '
-            "(ultra fast with deep reasoning)",
+            '"gemini-2.5-flash-lite|thinking" (ultra fast with deep reasoning)',
             '"gemini-2.5-pro|thinking" (intelligent with deep reasoning)',
         ],
         "openai": [
@@ -48,19 +46,27 @@ class ToolDescriptions:
         """Get the main description for the consultation tool."""
         provider_notes = cls._get_provider_notes(provider)
 
-        return f"""Consult an LLM about code files matching a pattern in a directory.
+        return f"""Analyze files with an LLM by providing a list of file paths.
 
-This tool collects all files matching a regex pattern from a directory tree,
-formats them into a structured document, and sends them to an LLM along with
-your query. The LLM analyzes the code and returns insights.
+Provide a list of absolute file paths (with optional wildcards in filenames only).
+The tool collects these files, formats them, and sends them to your chosen LLM
+along with your query.
 
 {provider_notes}
 
-Notes:
-- Automatically ignores: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules
-- File size limit: 10MB per file, 100MB total (optimized for large context models)
-- Large files are skipped with an error message
-- Includes detailed errors for debugging (permissions, missing paths, etc.)"""
+File specification rules:
+- All paths must be absolute (start with /)
+- Wildcards (*) allowed ONLY in filenames, not in directory paths
+- Must specify extension when using wildcards (e.g., *.py not just *)
+- Mix specific files and patterns: ["/path/src/*.py", "/path/README.md"]
+
+Examples:
+- Single file: ["/Users/john/project/main.py"]
+- Multiple files: ["/path/src/*.py", "/path/tests/*.py", "/path/README.md"]
+- All Python files in a directory: ["/Users/john/project/src/*.py"]
+
+Automatically ignores: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules
+Size limits: 1MB per file, 4MB total (optimized for ~1M token context)"""
 
     @classmethod
     def get_model_parameter_description(cls, provider: str) -> str:
@@ -91,30 +97,22 @@ Notes:
         return model_desc
 
     @classmethod
-    def get_path_description(cls) -> str:
-        """Get the path parameter description."""
-        return "Absolute filesystem path to search from (e.g., /Users/john/myproject)"
-
-    @classmethod
-    def get_pattern_description(cls) -> str:
-        """Get the pattern parameter description."""
+    def get_files_description(cls) -> str:
+        """Get the files parameter description."""
         return (
-            'Regex to match filenames. Common patterns: ".*\\.py$" for '
-            'Python files, ".*\\.(js|ts)$" for JavaScript/TypeScript'
+            "List of absolute file paths or patterns. Examples:\n"
+            '  - Specific file: "/Users/john/project/main.py"\n'
+            '  - Directory with wildcard: "/Users/john/project/src/*.py"\n'
+            '  - Multiple patterns: ["/path/src/*.js", "/path/lib/*.js", '
+            '"/path/README.md"]\n'
+            "Rules: Paths must be absolute, wildcards only in filenames, "
+            "extension required with wildcards"
         )
 
     @classmethod
     def get_query_description(cls) -> str:
         """Get the query parameter description."""
-        return (
-            "Your question about the code "
-            "(e.g., 'Which functions handle authentication?')"
-        )
-
-    @classmethod
-    def get_exclude_pattern_description(cls) -> str:
-        """Get the exclude_pattern parameter description."""
-        return 'Optional regex to exclude files (e.g., ".*test.*" to skip tests)'
+        return "Your question about the code (e.g., 'Which functions handle authentication?')"
 
     @classmethod
     def _get_provider_notes(cls, provider: str) -> str:

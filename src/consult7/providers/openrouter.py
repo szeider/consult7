@@ -4,8 +4,6 @@ import logging
 from typing import Optional, Tuple
 import httpx
 
-logger = logging.getLogger("consult7")
-
 from .base import BaseProvider, process_llm_response
 from ..constants import (
     OPENROUTER_URL,
@@ -25,6 +23,8 @@ from ..token_utils import (
     get_thinking_budget,
 )
 
+logger = logging.getLogger("consult7")
+
 
 class OpenRouterProvider(BaseProvider):
     """OpenRouter provider implementation."""
@@ -40,14 +40,10 @@ class OpenRouterProvider(BaseProvider):
 
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    MODELS_URL, headers=headers, timeout=API_FETCH_TIMEOUT
-                )
+                response = await client.get(MODELS_URL, headers=headers, timeout=API_FETCH_TIMEOUT)
 
                 if response.status_code != 200:
-                    logger.warning(
-                        f"Could not fetch model info: {response.status_code}"
-                    )
+                    logger.warning(f"Could not fetch model info: {response.status_code}")
                     return None
 
                 models = response.json().get("data", [])
@@ -67,9 +63,7 @@ class OpenRouterProvider(BaseProvider):
                         }
 
                 # Model not found in list
-                logger.warning(
-                    f"Model '{model_name}' not found in OpenRouter models list"
-                )
+                logger.warning(f"Model '{model_name}' not found in OpenRouter models list")
                 return None
 
         except Exception as e:
@@ -114,18 +108,14 @@ class OpenRouterProvider(BaseProvider):
 
         # Fixed output token limit for initial calculation
         base_max_output_tokens = (
-            DEFAULT_OUTPUT_TOKENS
-            if context_length > SMALL_MODEL_THRESHOLD
-            else SMALL_OUTPUT_TOKENS
+            DEFAULT_OUTPUT_TOKENS if context_length > SMALL_MODEL_THRESHOLD else SMALL_OUTPUT_TOKENS
         )
         max_output_tokens = base_max_output_tokens
 
         # Binary approach for reasoning mode - reserve full amount upfront
         reasoning_budget_actual = 0
         unknown_model_msg = ""
-        is_openai_model = any(
-            x in actual_model.lower() for x in ["gpt-4", "o1", "openai"]
-        )
+        is_openai_model = any(x in actual_model.lower() for x in ["gpt-4", "o1", "openai"])
 
         if reasoning_mode:
             # Check if it's an OpenAI model that uses effort levels
@@ -152,19 +142,13 @@ class OpenRouterProvider(BaseProvider):
                     if "anthropic" in actual_model.lower():
                         # Anthropic: ensure max_tokens > reasoning_budget
                         # We need at least reasoning_budget + some tokens for the actual response
-                        max_output_tokens = (
-                            reasoning_budget_actual + 2000
-                        )  # 2k for actual response
+                        max_output_tokens = reasoning_budget_actual + 2000  # 2k for actual response
                     else:
                         # Gemini and others: reasoning is additional to output
-                        max_output_tokens = (
-                            DEFAULT_OUTPUT_TOKENS + reasoning_budget_actual
-                        )
+                        max_output_tokens = DEFAULT_OUTPUT_TOKENS + reasoning_budget_actual
 
         # Calculate available input space with reasoning reserved upfront
-        available_for_input = int(
-            (context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
-        )
+        available_for_input = int((context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR)
 
         # Check against adjusted limit
         if estimated_tokens > available_for_input:
@@ -261,9 +245,7 @@ class OpenRouterProvider(BaseProvider):
                 if "choices" not in result or not result["choices"]:
                     return "", f"Unexpected API response format: {result}", None
 
-                llm_response = process_llm_response(
-                    result["choices"][0]["message"]["content"]
-                )
+                llm_response = process_llm_response(result["choices"][0]["message"]["content"])
 
                 # Add unknown model message if applicable
                 if unknown_model_msg:

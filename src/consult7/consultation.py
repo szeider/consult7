@@ -5,16 +5,14 @@ import logging
 from typing import Optional
 
 from .constants import DEFAULT_CONTEXT_LENGTH, LLM_CALL_TIMEOUT
-from .file_processor import discover_files, format_content
+from .file_processor import expand_file_patterns, format_content
 from .token_utils import estimate_tokens, parse_model_thinking
 from .providers import PROVIDERS
 
 logger = logging.getLogger("consult7")
 
 
-async def get_model_context_info(
-    model_name: str, provider: str, api_key: str
-) -> Optional[dict]:
+async def get_model_context_info(model_name: str, provider: str, api_key: str) -> Optional[dict]:
     """Get model context information based on provider and model."""
     try:
         # Parse model name for OpenAI models with context specification
@@ -64,8 +62,7 @@ async def get_model_context_info(
 
         # Fallback to default if no info available
         logger.warning(
-            f"Could not determine context length for {model_name}, "
-            f"using default of 128k tokens"
+            f"Could not determine context length for {model_name}, using default of 128k tokens"
         )
         return {"context_length": DEFAULT_CONTEXT_LENGTH, "provider": provider}
 
@@ -78,27 +75,25 @@ async def get_model_context_info(
 
 
 async def consultation_impl(
-    path: str,
-    pattern: str,
+    files: list[str],
     query: str,
     model: str,
-    exclude_pattern: Optional[str] = None,
     provider: str = "openrouter",
     api_key: str = None,
 ) -> str:
     """Implementation of the consultation tool logic."""
-    # Discover files
-    files, errors = discover_files(path, pattern, exclude_pattern)
+    # Expand file patterns
+    file_paths, errors = expand_file_patterns(files)
 
-    if not files and errors:
+    if not file_paths and errors:
         return "Error: No files found. Errors:\n" + "\n".join(errors)
 
     # Provide immediate feedback about what was found
-    if not files:
-        return "No files matching the pattern were found."
+    if not file_paths:
+        return "No files matching the patterns were found."
 
     # Format content
-    content, total_size = format_content(path, files, errors)
+    content, total_size = format_content(file_paths, errors)
 
     # Get model info (strip |thinking suffix if present, but keep context for OpenAI)
     if provider == "openai" and "|" in model:
@@ -124,9 +119,7 @@ async def consultation_impl(
         return f"Error: {e}"
 
     # Add size info that will be part of the query
-    size_info = (
-        f"\n\n---\nTotal content size: {total_size:,} bytes from {len(files)} files"
-    )
+    size_info = f"\n\n---\nTotal content size: {total_size:,} bytes from {len(file_paths)} files"
 
     # Estimate tokens for the full input
     full_content = content + size_info + f"\n\nQuery: {query}"
@@ -161,7 +154,7 @@ async def consultation_impl(
             f"Error: Request timed out after {LLM_CALL_TIMEOUT} seconds "
             f"(10 minutes). This is an extremely long time - "
             f"the model or API may be having issues.\n\n"
-            f"Collected {len(files)} files ({total_size:,} bytes){token_info}"
+            f"Collected {len(file_paths)} files ({total_size:,} bytes){token_info}"
         )
 
     # Add thinking/reasoning budget info if applicable (even for errors)
@@ -180,9 +173,7 @@ async def consultation_impl(
             )
 
             max_thinking = (
-                FLASH_MAX_THINKING_TOKENS
-                if "flash" in model.lower()
-                else PRO_MAX_THINKING_TOKENS
+                FLASH_MAX_THINKING_TOKENS if "flash" in model.lower() else PRO_MAX_THINKING_TOKENS
             )
             if provider == "openrouter":
                 # OpenRouter has model-specific limits
@@ -192,8 +183,7 @@ async def consultation_impl(
                     max_thinking = MAX_REASONING_TOKENS  # 32,000
             percentage = (thinking_budget / max_thinking) * 100
             token_info += (
-                f", {budget_type} budget: {thinking_budget:,} tokens "
-                f"({percentage:.1f}% of max)"
+                f", {budget_type} budget: {thinking_budget:,} tokens ({percentage:.1f}% of max)"
             )
         else:
             token_info += f", {budget_type} disabled (insufficient context)"
@@ -201,12 +191,12 @@ async def consultation_impl(
     if error:
         return (
             f"Error calling {provider} LLM: {error}\n\n"
-            f"Collected {len(files)} files ({total_size:,} bytes){token_info}"
+            f"Collected {len(file_paths)} files ({total_size:,} bytes){token_info}"
         )
 
     # Add size info to response for agent awareness
     return (
         f"{response}\n\n---\n"
-        f"Processed {len(files)} files ({total_size:,} bytes) "
+        f"Processed {len(file_paths)} files ({total_size:,} bytes) "
         f"with {model} ({provider}){token_info}"
     )

@@ -58,9 +58,7 @@ class OpenAIProvider(BaseProvider):
         has_thinking = "thinking" in parts
 
         # Check if this is an o-series model that supports reasoning
-        is_reasoning_model = any(
-            x in actual_model_name.lower() for x in ["o1", "o3", "o4"]
-        )
+        is_reasoning_model = any(x in actual_model_name.lower() for x in ["o1", "o3", "o4"])
 
         # Parse context from model specification
         specified_context = None
@@ -97,9 +95,7 @@ class OpenAIProvider(BaseProvider):
 
         # Check against model context limit
         max_output_tokens = DEFAULT_OUTPUT_TOKENS
-        available_for_input = int(
-            (context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR
-        )
+        available_for_input = int((context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR)
 
         if estimated_tokens > available_for_input:
             return (

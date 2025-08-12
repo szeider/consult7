@@ -20,8 +20,7 @@ def process_llm_response(response_content: Optional[str]) -> str:
 
     if len(response_content) > MAX_RESPONSE_SIZE:
         response_content = (
-            response_content[:MAX_RESPONSE_SIZE]
-            + "\n[TRUNCATED - Response exceeded size limit]"
+            response_content[:MAX_RESPONSE_SIZE] + "\n[TRUNCATED - Response exceeded size limit]"
         )
 
     return response_content

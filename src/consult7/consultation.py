@@ -46,7 +46,9 @@ async def get_model_context_info(
             # OpenAI requires context to be specified
             if not specified_context:
                 raise ValueError(
-                    f"OpenAI models require context length specification. Use format: '{actual_model_name}|128k' or '{actual_model_name}|200000'"
+                    f"OpenAI models require context length specification. "
+                    f"Use format: '{actual_model_name}|128k' or "
+                    f"'{actual_model_name}|200000'"
                 )
             info = {
                 "context_length": specified_context,
@@ -62,7 +64,8 @@ async def get_model_context_info(
 
         # Fallback to default if no info available
         logger.warning(
-            f"Could not determine context length for {model_name}, using default of 128k tokens"
+            f"Could not determine context length for {model_name}, "
+            f"using default of 128k tokens"
         )
         return {"context_length": DEFAULT_CONTEXT_LENGTH, "provider": provider}
 
@@ -142,7 +145,7 @@ async def consultation_impl(
     actual_model, custom_thinking = parse_model_thinking(model)
     thinking_mode = custom_thinking is not None or model.endswith("|thinking")
 
-    # Call the provider with timeout protection
+    # Call the provider with generous timeout protection (10 minutes)
     try:
         async with asyncio.timeout(LLM_CALL_TIMEOUT):
             response, error, thinking_budget = await provider_instance.call_llm(
@@ -154,7 +157,12 @@ async def consultation_impl(
                 custom_thinking,
             )
     except asyncio.TimeoutError:
-        return f"Error: Request timed out after {LLM_CALL_TIMEOUT} seconds. Try using fewer files or a smaller query.\n\nCollected {len(files)} files ({total_size:,} bytes){token_info}"
+        return (
+            f"Error: Request timed out after {LLM_CALL_TIMEOUT} seconds "
+            f"(10 minutes). This is an extremely long time - "
+            f"the model or API may be having issues.\n\n"
+            f"Collected {len(files)} files ({total_size:,} bytes){token_info}"
+        )
 
     # Add thinking/reasoning budget info if applicable (even for errors)
     if thinking_budget is not None:
@@ -183,12 +191,22 @@ async def consultation_impl(
                 else:
                     max_thinking = MAX_REASONING_TOKENS  # 32,000
             percentage = (thinking_budget / max_thinking) * 100
-            token_info += f", {budget_type} budget: {thinking_budget:,} tokens ({percentage:.1f}% of max)"
+            token_info += (
+                f", {budget_type} budget: {thinking_budget:,} tokens "
+                f"({percentage:.1f}% of max)"
+            )
         else:
             token_info += f", {budget_type} disabled (insufficient context)"
 
     if error:
-        return f"Error calling {provider} LLM: {error}\n\nCollected {len(files)} files ({total_size:,} bytes){token_info}"
+        return (
+            f"Error calling {provider} LLM: {error}\n\n"
+            f"Collected {len(files)} files ({total_size:,} bytes){token_info}"
+        )
 
     # Add size info to response for agent awareness
-    return f"{response}\n\n---\nProcessed {len(files)} files ({total_size:,} bytes) with {model} ({provider}){token_info}"
+    return (
+        f"{response}\n\n---\n"
+        f"Processed {len(files)} files ({total_size:,} bytes) "
+        f"with {model} ({provider}){token_info}"
+    )

@@ -284,6 +284,10 @@ class OpenRouterProvider(BaseProvider):
                     )
 
         except httpx.TimeoutException:
-            return "", f"Request timed out after {OPENROUTER_TIMEOUT} seconds", None
+            return (
+                "",
+                f"Request timed out after {OPENROUTER_TIMEOUT} seconds (10 minutes)",
+                None,
+            )
         except Exception as e:
             return "", f"Error calling API: {e}", None

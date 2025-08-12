@@ -106,15 +106,22 @@ Standard models:
 - `"google/gemini-2.5-flash"` - Fast, 1M context
 - `"google/gemini-2.5-flash-lite-preview-06-17"` - Ultra fast, 1M context
 - `"anthropic/claude-sonnet-4"` - Claude Sonnet, 200k context
+- `"anthropic/claude-opus-4.1"` - Claude Opus 4.1, 200k context
+- `"openai/gpt-5"` - GPT-5, 400k context
 - `"openai/gpt-4.1"` - GPT-4.1, 1M+ context
 
 With reasoning mode (add `|thinking` suffix):
 - `"anthropic/claude-sonnet-4|thinking"` - Claude with 31,999 reasoning tokens
+- `"anthropic/claude-opus-4.1|thinking"` - Opus 4.1 with reasoning
 - `"google/gemini-2.5-flash-lite-preview-06-17|thinking"` - Ultra fast with reasoning
+- `"openai/gpt-5|thinking"` - GPT-5 with reasoning
 - `"openai/gpt-4.1|thinking"` - GPT-4.1 with reasoning effort=high
 
 #### OpenAI
 Standard models (include context length):
+- `"gpt-5|400k"` - GPT-5, 400k context
+- `"gpt-5-mini|400k"` - GPT-5 Mini, faster
+- `"gpt-5-nano|400k"` - GPT-5 Nano, ultra fast
 - `"gpt-4.1-2025-04-14|1047576"` - 1M+ context, very fast
 - `"gpt-4.1-nano-2025-04-14|1047576"` - 1M+ context, ultra fast
 - `"o3-2025-04-16|200k"` - Advanced reasoning model

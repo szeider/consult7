@@ -78,7 +78,8 @@ class OpenAIProvider(BaseProvider):
                 "",
                 (
                     f"OpenAI models require context length specification. "
-                    f"Use format: '{actual_model_name}|128k' or '{actual_model_name}|200000'"
+                    f"Use format: '{actual_model_name}|128k' or "
+                    f"'{actual_model_name}|200000'"
                 ),
                 None,
             )
@@ -86,7 +87,10 @@ class OpenAIProvider(BaseProvider):
         context_length = specified_context
 
         # Estimate tokens for the input
-        system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
+        system_msg = (
+            "You are a helpful assistant analyzing code and files. "
+            "Be concise and specific in your responses."
+        )
         user_msg = f"Here are the files to analyze:\n\n{content}\n\nQuery: {query}"
         total_input = system_msg + user_msg
         estimated_tokens = estimate_tokens(total_input)
@@ -102,8 +106,10 @@ class OpenAIProvider(BaseProvider):
                 "",
                 (
                     f"Content too large: ~{estimated_tokens:,} tokens estimated, "
-                    f"but model {model_name} has only ~{available_for_input:,} tokens available for input "
-                    f"(total limit: {context_length:,}, reserved for output: {max_output_tokens:,}). "
+                    f"but model {model_name} has only ~{available_for_input:,} "
+                    f"tokens available for input "
+                    f"(total limit: {context_length:,}, "
+                    f"reserved for output: {max_output_tokens:,}). "
                     f"Try reducing file count/size."
                 ),
                 None,
@@ -113,7 +119,7 @@ class OpenAIProvider(BaseProvider):
             client = AsyncOpenAI(api_key=api_key)
 
             # Build parameters
-            # o-series models don't support system messages
+            # o-series models don't support system messages (but GPT-5 does)
             if any(x in actual_model_name.lower() for x in ["o1", "o3", "o4"]):
                 messages = [
                     {"role": "user", "content": f"{system_msg}\n\n{user_msg}"},
@@ -130,10 +136,11 @@ class OpenAIProvider(BaseProvider):
                 "messages": messages,
             }
 
-            # o-series models have different parameter requirements
-            if any(x in actual_model_name.lower() for x in ["o1", "o3", "o4"]):
+            # o-series and GPT-5 models have different parameter requirements
+            if any(x in actual_model_name.lower() for x in ["o1", "o3", "o4", "gpt-5"]):
                 params["max_completion_tokens"] = DEFAULT_OUTPUT_TOKENS
-                # o-series models only support temperature=1
+                # IMPORTANT: o-series and GPT-5 require temperature=1 (default)
+                # Any other value causes API error - don't set temperature
             else:
                 params["max_tokens"] = DEFAULT_OUTPUT_TOKENS
                 params["temperature"] = DEFAULT_TEMPERATURE
@@ -149,9 +156,16 @@ class OpenAIProvider(BaseProvider):
             # Add note about thinking mode if used
             if has_thinking:
                 if is_reasoning_model:
-                    llm_response += "\n\n[Note: o-series models use reasoning tokens automatically. The |thinking suffix is informational - use OpenRouter for effort control.]"
+                    llm_response += (
+                        "\n\n[Note: o-series models use reasoning tokens "
+                        "automatically. The |thinking suffix is informational - "
+                        "use OpenRouter for effort control.]"
+                    )
                 else:
-                    llm_response += f"\n\n[Note: |thinking not supported for {actual_model_name}. Only o-series models support reasoning.]"
+                    llm_response += (
+                        f"\n\n[Note: |thinking not supported for {actual_model_name}. "
+                        f"Only o-series models support reasoning.]"
+                    )
 
             return llm_response, None, None
 

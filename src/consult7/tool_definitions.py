@@ -10,9 +10,14 @@ class ToolDescriptions:
             '"google/gemini-2.5-flash" (fast, 1M context)',
             '"google/gemini-2.5-flash-lite-preview-06-17" (ultra fast, 1M context)',
             '"anthropic/claude-sonnet-4" (Claude Sonnet, 200k context)',
+            '"anthropic/claude-opus-4.1" (Claude Opus 4.1, 200k context)',
+            '"openai/gpt-5" (GPT-5, 400k context)',
             '"openai/gpt-4.1" (GPT-4.1, 1M+ context)',
             '"anthropic/claude-sonnet-4|thinking" (Claude with 31,999 tokens)',
-            '"google/gemini-2.5-flash-lite-preview-06-17|thinking" (ultra fast with reasoning)',
+            '"anthropic/claude-opus-4.1|thinking" (Opus 4.1 with reasoning)',
+            '"google/gemini-2.5-flash-lite-preview-06-17|thinking" '
+            "(ultra fast with reasoning)",
+            '"openai/gpt-5|thinking" (GPT-5 with reasoning)',
             '"openai/gpt-4.1|thinking" (GPT-4.1 with reasoning effort=high)',
         ],
         "google": [
@@ -21,10 +26,14 @@ class ToolDescriptions:
             '"gemini-2.5-pro" (intelligent, standard mode)',
             '"gemini-2.0-flash-exp" (experimental model)',
             '"gemini-2.5-flash|thinking" (fast with deep reasoning)',
-            '"gemini-2.5-flash-lite-preview-06-17|thinking" (ultra fast with deep reasoning)',
+            '"gemini-2.5-flash-lite-preview-06-17|thinking" '
+            "(ultra fast with deep reasoning)",
             '"gemini-2.5-pro|thinking" (intelligent with deep reasoning)',
         ],
         "openai": [
+            '"gpt-5|400k" (GPT-5, 400k context)',
+            '"gpt-5-mini|400k" (GPT-5 Mini, faster)',
+            '"gpt-5-nano|400k" (GPT-5 Nano, ultra fast)',
             '"gpt-4.1-2025-04-14|1047576" (1M+ context, very fast)',
             '"gpt-4.1-nano-2025-04-14|1047576" (1M+ context, ultra fast)',
             '"o3-2025-04-16|200k" (advanced reasoning model)',
@@ -97,7 +106,10 @@ Notes:
     @classmethod
     def get_query_description(cls) -> str:
         """Get the query parameter description."""
-        return "Your question about the code (e.g., 'Which functions handle authentication?')"
+        return (
+            "Your question about the code "
+            "(e.g., 'Which functions handle authentication?')"
+        )
 
     @classmethod
     def get_exclude_pattern_description(cls) -> str:
@@ -111,7 +123,8 @@ Notes:
             return ""  # Move note to model parameter description
         elif provider == "google":
             return (
-                "Thinking Mode: Add |thinking to any model for deep reasoning (e.g., gemini-2.5-flash|thinking).\n"
+                "Thinking Mode: Add |thinking to any model for deep reasoning "
+                "(e.g., gemini-2.5-flash|thinking).\n"
                 "Advanced: For custom thinking limits, use |thinking=30000"
             )
         elif provider == "openrouter":

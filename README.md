@@ -35,6 +35,13 @@ When working with AI agents that have limited context windows (like Claude with 
 * **Query:** "Analyze the authentication flow across this codebase. Think step by step about security vulnerabilities and suggest improvements"
 * **Model:** `"gemini-2.5-flash|thinking"`
 
+### Generate a report saved to file
+* **Files:** `["/Users/john/project/src/*.py", "/Users/john/project/tests/*.py"]`
+* **Query:** "Generate a comprehensive code review report with architecture analysis, code quality assessment, and improvement recommendations"
+* **Model:** `"gemini-2.5-pro"`
+* **Output File:** `"/Users/john/reports/code_review.md"`
+* **Result:** Returns `"Result has been saved to /Users/john/reports/code_review.md"` instead of flooding the agent's context
+
 ## Installation
 
 ### Claude Code
@@ -161,6 +168,18 @@ When using the consultation tool, you provide a list of file paths with these ru
 The tool automatically ignores: `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`
 
 **Size limits:** 1MB per file, 4MB total (optimized for ~1M token context windows)
+
+## Tool Parameters
+
+The consultation tool accepts the following parameters:
+
+- **files** (required): List of absolute file paths or patterns with wildcards in filenames only
+- **query** (required): Your question or instruction for the LLM to process the files
+- **model** (required): The LLM model to use (see Model Examples above for each provider)
+- **output_file** (optional): Absolute path to save the response to a file instead of returning it
+  - If the file exists, it will be saved with `_updated` suffix (e.g., `report.md` → `report_updated.md`)
+  - When specified, returns only: `"Result has been saved to /path/to/file"`
+  - Useful for generating reports, documentation, or analyses without flooding the agent's context
 
 ## Testing
 

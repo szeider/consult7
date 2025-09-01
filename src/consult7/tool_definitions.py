@@ -115,6 +115,15 @@ Size limits: 1MB per file, 4MB total (optimized for ~1M token context)"""
         return "Your question about the code (e.g., 'Which functions handle authentication?')"
 
     @classmethod
+    def get_output_file_description(cls) -> str:
+        """Get the output_file parameter description."""
+        return (
+            "Optional: Absolute path to save the LLM response to a file instead of returning it. "
+            "If the file exists, it will be saved with '_updated' suffix (e.g., report.md → report_updated.md). "
+            "When specified, the tool returns only a brief confirmation message."
+        )
+
+    @classmethod
     def _get_provider_notes(cls, provider: str) -> str:
         """Get provider-specific notes."""
         if provider == "openai":

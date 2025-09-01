@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 
 from .constants import DEFAULT_CONTEXT_LENGTH, LLM_CALL_TIMEOUT
-from .file_processor import expand_file_patterns, format_content
+from .file_processor import expand_file_patterns, format_content, save_output_to_file
 from .token_utils import estimate_tokens, parse_model_thinking
 from .providers import PROVIDERS
 
@@ -80,6 +80,7 @@ async def consultation_impl(
     model: str,
     provider: str = "openrouter",
     api_key: str = None,
+    output_file: Optional[str] = None,
 ) -> str:
     """Implementation of the consultation tool logic."""
     # Expand file patterns
@@ -194,7 +195,18 @@ async def consultation_impl(
             f"Collected {len(file_paths)} files ({total_size:,} bytes){token_info}"
         )
 
-    # Add size info to response for agent awareness
+    # Handle output file if specified
+    if output_file:
+        # Save just the LLM response (without the metadata)
+        save_path, save_error = save_output_to_file(response, output_file)
+        
+        if save_error:
+            return f"Error saving output: {save_error}"
+        
+        # Return brief confirmation message
+        return f"Result has been saved to {save_path}"
+    
+    # Normal mode: return full response with metadata
     return (
         f"{response}\n\n---\n"
         f"Processed {len(file_paths)} files ({total_size:,} bytes) "

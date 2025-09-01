@@ -135,6 +135,10 @@ async def main():
                                 ToolDescriptions.get_model_parameter_description(server.provider)
                             ),
                         },
+                        "output_file": {
+                            "type": "string",
+                            "description": ToolDescriptions.get_output_file_description(),
+                        },
                     },
                     "required": ["files", "query", "model"],
                 },
@@ -152,6 +156,7 @@ async def main():
                     arguments["model"],
                     server.provider,
                     server.api_key,
+                    arguments.get("output_file"),
                 )
                 return [types.TextContent(type="text", text=result)]
             else:

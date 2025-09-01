@@ -155,3 +155,55 @@ def format_content(files: List[Path], errors: List[str]) -> Tuple[str, int]:
             content_parts.append(f"- {error}")
 
     return "\n".join(content_parts), total_size
+
+
+def save_output_to_file(content: str, output_path: str) -> Tuple[str, str]:
+    """Save content to a file with conflict resolution.
+    
+    Args:
+        content: The content to save
+        output_path: The desired output file path
+        
+    Returns:
+        Tuple of (actual_save_path, error_message)
+        - actual_save_path: Path where content was saved (may differ from output_path)
+        - error_message: Error message if save failed, empty string on success
+    """
+    try:
+        # Validate absolute path
+        if not os.path.isabs(output_path):
+            return "", f"Output path must be absolute: {output_path}"
+            
+        path_obj = Path(output_path)
+        
+        # Handle existing file conflict
+        if path_obj.exists():
+            # Create new filename with "_updated" suffix
+            stem = path_obj.stem
+            suffix = path_obj.suffix
+            parent = path_obj.parent
+            new_path = parent / f"{stem}_updated{suffix}"
+            
+            # Keep trying with additional "_updated" suffixes if needed
+            counter = 1
+            while new_path.exists() and counter < 100:
+                new_path = parent / f"{stem}_updated_{counter}{suffix}"
+                counter += 1
+                
+            if counter >= 100:
+                return "", f"Too many existing files with '_updated' suffix for: {output_path}"
+                
+            path_obj = new_path
+        
+        # Ensure parent directory exists
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write the content
+        path_obj.write_text(content, encoding="utf-8")
+        
+        return str(path_obj), ""
+        
+    except PermissionError:
+        return "", f"Permission denied writing to: {output_path}"
+    except Exception as e:
+        return "", f"Error saving file: {e}"

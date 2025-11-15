@@ -7,7 +7,7 @@ from ..constants import MAX_RESPONSE_SIZE
 
 
 def process_llm_response(response_content: Optional[str]) -> str:
-    """Process LLM response: handle None and truncate if needed.
+    """Normalize and truncate LLM response if needed.
 
     Args:
         response_content: The response content from the LLM
@@ -15,22 +15,17 @@ def process_llm_response(response_content: Optional[str]) -> str:
     Returns:
         Processed response content
     """
-    if response_content is None:
-        response_content = ""
-
-    if len(response_content) > MAX_RESPONSE_SIZE:
-        response_content = (
-            response_content[:MAX_RESPONSE_SIZE] + "\n[TRUNCATED - Response exceeded size limit]"
-        )
-
-    return response_content
+    response = response_content or ""
+    if len(response) > MAX_RESPONSE_SIZE:
+        return response[:MAX_RESPONSE_SIZE] + "\n[TRUNCATED - Response exceeded size limit]"
+    return response
 
 
 class BaseProvider(ABC):
     """Abstract base class for LLM providers."""
 
     @abstractmethod
-    async def get_model_info(self, model_name: str, api_key: str) -> Optional[dict]:
+    async def get_model_info(self, model_name: str, api_key: Optional[str]) -> Optional[dict]:
         """Get model context information.
 
         Args:

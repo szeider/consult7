@@ -6,56 +6,22 @@ from typing import Optional
 
 from .constants import DEFAULT_CONTEXT_LENGTH, LLM_CALL_TIMEOUT
 from .file_processor import expand_file_patterns, format_content, save_output_to_file
-from .token_utils import estimate_tokens, parse_model_thinking
+from .token_utils import estimate_tokens, get_thinking_budget, calculate_max_file_size
 from .providers import PROVIDERS
 
 logger = logging.getLogger("consult7")
 
 
-async def get_model_context_info(model_name: str, provider: str, api_key: str) -> Optional[dict]:
-    """Get model context information based on provider and model."""
+async def get_model_context_info(model_name: str, provider: str, api_key: Optional[str]) -> dict:
+    """Get model context information from OpenRouter API."""
     try:
-        # Parse model name for OpenAI models with context specification
-        actual_model_name = model_name
-        specified_context = None
-
-        if provider == "openai" and "|" in model_name:
-            parts = model_name.split("|")
-            actual_model_name = parts[0]
-
-            # Check if we have context specification
-            # It should be in parts[1] and not be "thinking"
-            if len(parts) >= 2 and parts[1] and parts[1] != "thinking":
-                context_str = parts[1]
-                # Parse context like "200k" -> 200000, "1047576" -> 1047576
-                if context_str.endswith("k"):
-                    specified_context = int(float(context_str[:-1]) * 1000)
-                else:
-                    specified_context = int(context_str)
-
-        # Get provider instance
-        provider_instance = PROVIDERS.get(provider)
-        if not provider_instance:
+        # Get provider instance (always openrouter)
+        if not (provider_instance := PROVIDERS.get(provider)):
             logger.warning(f"Unknown provider '{provider}'")
             return {"context_length": DEFAULT_CONTEXT_LENGTH, "provider": provider}
 
-        # Handle OpenAI special case
-        if provider == "openai":
-            # OpenAI requires context to be specified
-            if not specified_context:
-                raise ValueError(
-                    f"OpenAI models require context length specification. "
-                    f"Use format: '{actual_model_name}|128k' or "
-                    f"'{actual_model_name}|200000'"
-                )
-            info = {
-                "context_length": specified_context,
-                "max_output_tokens": 8000,  # Use standard output allocation
-                "provider": "openai",
-            }
-        else:
-            # Get model info from provider
-            info = await provider_instance.get_model_info(actual_model_name, api_key)
+        # Get model info from provider API
+        info = await provider_instance.get_model_info(model_name, api_key)
 
         if info and "context_length" in info:
             return info
@@ -66,9 +32,6 @@ async def get_model_context_info(model_name: str, provider: str, api_key: str) -
         )
         return {"context_length": DEFAULT_CONTEXT_LENGTH, "provider": provider}
 
-    except ValueError:
-        # Re-raise ValueError to be caught by caller
-        raise
     except Exception as e:
         logger.error(f"Error getting model info: {e}")
         return {"context_length": DEFAULT_CONTEXT_LENGTH, "provider": provider}
@@ -78,8 +41,9 @@ async def consultation_impl(
     files: list[str],
     query: str,
     model: str,
+    mode: str,
     provider: str = "openrouter",
-    api_key: str = None,
+    api_key: Optional[str] = None,
     output_file: Optional[str] = None,
 ) -> str:
     """Implementation of the consultation tool logic."""
@@ -93,31 +57,19 @@ async def consultation_impl(
     if not file_paths:
         return "No files matching the patterns were found."
 
-    # Format content
-    content, total_size = format_content(file_paths, errors)
+    # Get model info to calculate dynamic limits
+    model_info = await get_model_context_info(model, provider, api_key)
+    model_context_length = model_info.get("context_length", DEFAULT_CONTEXT_LENGTH)
 
-    # Get model info (strip |thinking suffix if present, but keep context for OpenAI)
-    if provider == "openai" and "|" in model:
-        # For OpenAI, we need to preserve the context specification
-        parts = model.split("|")
-        if len(parts) >= 3 and parts[2] == "thinking":
-            # Format: model|context|thinking
-            model_for_info = "|".join(parts[:2])
-        elif len(parts) == 2 and parts[1] != "thinking":
-            # Format: model|context
-            model_for_info = model
-        else:
-            # Format: model|thinking (invalid for OpenAI)
-            model_for_info = parts[0]
-    else:
-        # For other providers, strip |thinking suffix
-        model_for_info = model.split("|")[0] if "|" in model else model
-    try:
-        model_info = await get_model_context_info(model_for_info, provider, api_key)
-        model_context_length = model_info.get("context_length", DEFAULT_CONTEXT_LENGTH)
-    except ValueError as e:
-        # OpenAI context specification error
-        return f"Error: {e}"
+    # Calculate dynamic file size limits based on model's context window
+    max_total_size, max_file_size = calculate_max_file_size(model_context_length, mode, model)
+
+    # Format content with model-specific limits
+    content, total_size = format_content(file_paths, errors, max_total_size, max_file_size)
+
+    # Determine thinking mode based on mode parameter
+    thinking_budget_value = get_thinking_budget(model, mode)
+    thinking_mode = thinking_budget_value is not None
 
     # Add size info that will be part of the query
     size_info = f"\n\n---\nTotal content size: {total_size:,} bytes from {len(file_paths)} files"
@@ -135,10 +87,6 @@ async def consultation_impl(
     if not provider_instance:
         return f"Error: Unknown provider '{provider}'"
 
-    # Parse thinking mode
-    actual_model, custom_thinking = parse_model_thinking(model)
-    thinking_mode = custom_thinking is not None or model.endswith("|thinking")
-
     # Call the provider with generous timeout protection (10 minutes)
     try:
         async with asyncio.timeout(LLM_CALL_TIMEOUT):
@@ -148,7 +96,7 @@ async def consultation_impl(
                 model,
                 api_key,
                 thinking_mode,
-                custom_thinking,
+                thinking_budget_value,
             )
     except asyncio.TimeoutError:
         return (
@@ -158,36 +106,31 @@ async def consultation_impl(
             f"Collected {len(file_paths)} files ({total_size:,} bytes){token_info}"
         )
 
-    # Add thinking/reasoning budget info if applicable (even for errors)
+    # Add reasoning budget info if applicable (even for errors)
     if thinking_budget is not None:
-        budget_type = "thinking" if provider == "google" else "reasoning"
         if thinking_budget == -1:
             # Special marker for OpenAI effort-based reasoning
-            token_info += f", {budget_type} mode: effort=high (~80% of output budget)"
+            token_info += ", reasoning mode: effort=high (~80% of output budget)"
         elif thinking_budget > 0:
-            # Calculate percentage of maximum possible thinking
+            # Calculate percentage of maximum possible reasoning tokens
             # Import these only when needed to avoid circular imports
             from .token_utils import (
                 FLASH_MAX_THINKING_TOKENS,
-                PRO_MAX_THINKING_TOKENS,
                 MAX_REASONING_TOKENS,
             )
 
-            max_thinking = (
-                FLASH_MAX_THINKING_TOKENS if "flash" in model.lower() else PRO_MAX_THINKING_TOKENS
-            )
-            if provider == "openrouter":
-                # OpenRouter has model-specific limits
-                if "gemini" in model.lower() and "flash" in model.lower():
-                    max_thinking = FLASH_MAX_THINKING_TOKENS  # 24,576
-                else:
-                    max_thinking = MAX_REASONING_TOKENS  # 32,000
-            percentage = (thinking_budget / max_thinking) * 100
+            # Determine max reasoning based on model
+            if "gemini" in model.lower() and "flash" in model.lower():
+                max_reasoning = FLASH_MAX_THINKING_TOKENS  # 24,576
+            else:
+                max_reasoning = MAX_REASONING_TOKENS  # 32,000 (Anthropic, others)
+
+            percentage = (thinking_budget / max_reasoning) * 100
             token_info += (
-                f", {budget_type} budget: {thinking_budget:,} tokens ({percentage:.1f}% of max)"
+                f", reasoning budget: {thinking_budget:,} tokens ({percentage:.1f}% of max)"
             )
         else:
-            token_info += f", {budget_type} disabled (insufficient context)"
+            token_info += ", reasoning disabled (insufficient context)"
 
     if error:
         return (
@@ -199,16 +142,17 @@ async def consultation_impl(
     if output_file:
         # Save just the LLM response (without the metadata)
         save_path, save_error = save_output_to_file(response, output_file)
-        
+
         if save_error:
             return f"Error saving output: {save_error}"
-        
+
         # Return brief confirmation message
         return f"Result has been saved to {save_path}"
-    
+
     # Normal mode: return full response with metadata
+    mode_str = f" [{mode}]" if mode != "fast" else ""
     return (
         f"{response}\n\n---\n"
         f"Processed {len(file_paths)} files ({total_size:,} bytes) "
-        f"with {model} ({provider}){token_info}"
+        f"with {model}{mode_str} ({provider}){token_info}"
     )

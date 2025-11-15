@@ -1,13 +1,12 @@
 """Token estimation and thinking budget utilities for Consult7."""
 
 from typing import Optional
+from .constants import DEFAULT_OUTPUT_TOKENS
 
 # Token and model constants
 TOKEN_SAFETY_FACTOR = 0.9  # Safety buffer for token calculations
 
 # Thinking/reasoning constants
-MIN_THINKING_TOKENS = 500  # Minimum tokens needed for meaningful thinking
-MIN_REASONING_TOKENS = 1_024  # OpenRouter minimum reasoning requirement
 MAX_REASONING_TOKENS = 31_999  # OpenRouter maximum reasoning cap (actual limit for Anthropic)
 FLASH_MAX_THINKING_TOKENS = 24_576  # Google Flash model thinking limit
 PRO_MAX_THINKING_TOKENS = 32_768  # Google Pro model thinking limit
@@ -17,30 +16,65 @@ CHARS_PER_TOKEN_REGULAR = 3.2  # Characters per token for regular text/code
 CHARS_PER_TOKEN_HTML = 2.5  # Characters per token for HTML/XML
 TOKEN_ESTIMATION_BUFFER = 1.1  # 10% buffer for token estimation
 
-# Thinking/Reasoning Token Limits by Model
-# Easy to update: just add new models here
+# Thinking/Reasoning Token Limits by Model - Officially Supported Models Only
 THINKING_LIMITS = {
-    # Google models
-    "gemini-2.0-flash-exp": 32_768,
-    "gemini-2.0-flash-thinking-exp": 32_768,
-    "gemini-2.0-flash-thinking-exp-01-21": 32_768,
-    "gemini-2.5-flash": 24_576,
-    "gemini-2.5-flash-latest": 24_576,
-    "gemini-2.5-flash-lite": 24_576,  # Same as Flash
-    "gemini-2.5-pro": 32_768,
-    "gemini-2.5-pro-latest": 32_768,
-    # OpenRouter models
-    "google/gemini-2.5-flash": 24_576,
-    "google/gemini-2.5-flash-lite": 24_576,  # Same as Flash
+    # OpenAI models - use effort-based reasoning (not token counts)
+    "openai/gpt-5.1": "effort",
+    # Google Gemini models
     "google/gemini-2.5-pro": 32_768,
-    "anthropic/claude-opus-4": 31_999,  # Actual limit is 31,999, not 32,000
-    "anthropic/claude-sonnet-4": 31_999,  # Using same limit for consistency
-    # OpenAI models - special marker for effort-based handling
-    "openai/gpt-4.1": "effort",
-    "openai/gpt-4.1-mini": "effort",
-    "openai/gpt-4.1-nano": "effort",
-    "openai/o1": "effort",
+    "google/gemini-2.5-flash": 24_576,
+    "google/gemini-2.5-flash-lite": 24_576,
+    # Anthropic Claude models
+    "anthropic/claude-sonnet-4.5": 31_999,
+    "anthropic/claude-opus-4.1": 31_999,
+    # X-AI Grok models - TBD (need to test)
+    "x-ai/grok-4": 32_000,  # To be confirmed
+    "x-ai/grok-4-fast": 32_000,  # To be confirmed
 }
+
+
+def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> tuple[int, int]:
+    """Calculate maximum file size in bytes based on model's context window.
+
+    Uses generous limits - lets the API be the final arbiter if context overflows.
+
+    Args:
+        context_length: Model's context window in tokens
+        mode: Performance mode (fast/mid/think)
+        model_name: The model name
+
+    Returns:
+        Tuple of (max_total_bytes, max_per_file_bytes)
+    """
+    # Reserve tokens for output
+    output_reserve = DEFAULT_OUTPUT_TOKENS
+
+    # Reserve tokens for reasoning/thinking if applicable
+    thinking_budget_value = get_thinking_budget(model_name, mode)
+
+    # Handle different thinking budget types
+    if thinking_budget_value == "effort":
+        # OpenAI effort-based: reserve ~40% of output budget for reasoning
+        thinking_budget = int(output_reserve * 0.4)
+    elif thinking_budget_value is not None:
+        thinking_budget = thinking_budget_value
+    else:
+        thinking_budget = 0
+
+    # Calculate available tokens for input files
+    # Be generous - let the API reject if truly too much
+    available_tokens = context_length - output_reserve - thinking_budget
+
+    # Ensure we have at least some capacity
+    available_tokens = max(available_tokens, 10_000)  # Minimum 10k tokens
+
+    # Convert tokens to bytes (approximately 4 bytes per token for code)
+    max_total_bytes = available_tokens * 4
+
+    # Per-file limit: generous - 50% of total or 10MB, whichever is smaller
+    max_per_file = min(max_total_bytes // 2, 10_000_000)
+
+    return max_total_bytes, max_per_file
 
 
 def estimate_tokens(text: str) -> int:
@@ -65,70 +99,38 @@ def estimate_tokens(text: str) -> int:
     return int(buffered_estimate + 0.5)  # Round to nearest integer
 
 
-def _parse_thinking_suffix(model_name: str) -> tuple[str, bool]:
-    """Extract thinking suffix from model name."""
-    if "|thinking" in model_name:
-        return model_name.replace("|thinking", ""), True
-    return model_name, False
-
-
-def parse_model_thinking(model_spec: str) -> tuple[str, Optional[int]]:
-    """Parse model specification to extract model name and optional thinking tokens.
-
-    Examples:
-        "gemini-2.5-flash|thinking" -> ("gemini-2.5-flash", None)
-        "gemini-2.5-flash|thinking=10000" -> ("gemini-2.5-flash", 10000)
-        "gemini-2.5-flash" -> ("gemini-2.5-flash", None)
+def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
+    """Get thinking tokens for a model based on mode.
 
     Args:
-        model_spec: Model specification string
+        model_name: The model name
+        mode: Performance mode - "fast", "mid", or "think"
 
     Returns:
-        Tuple of (model_name, thinking_tokens or None)
+        Thinking token budget, "effort" for OpenAI models, or None for fast mode
     """
-    # Check for |thinking or |thinking=N suffix
-    if "|thinking" in model_spec:
-        parts = model_spec.split("|thinking", 1)
-        model_name = parts[0]
+    # Fast mode: no thinking
+    if mode == "fast":
+        return None
 
-        # Check if there's a value after |thinking
-        if len(parts) > 1 and parts[1].startswith("="):
-            try:
-                thinking_value = int(parts[1][1:])  # Skip the '='
-                return model_name, thinking_value
-            except ValueError:
-                # Invalid number, treat as no override
-                return model_name, None
+    # Get model's max thinking limit
+    limit = THINKING_LIMITS.get(model_name)
 
-        # Just |thinking without value
-        return model_name, None
+    if limit is None:
+        # Unknown model - return None to disable thinking
+        return None
 
-    # No thinking suffix
-    return model_spec, None
+    # OpenAI models use effort-based reasoning
+    if limit == "effort":
+        return "effort"
 
+    # Mid mode: moderate reasoning (50% of max)
+    if mode == "mid":
+        return limit // 2
 
-def get_thinking_budget(model_name: str, custom_tokens: Optional[int] = None) -> Optional[int]:
-    """Get thinking tokens for a model. Returns None if unknown model without override.
+    # Think mode: maximum reasoning budget
+    if mode == "think":
+        return limit
 
-    Args:
-        model_name: The model name (without |thinking suffix)
-        custom_tokens: Optional user-specified thinking budget
-
-    Returns:
-        Thinking token budget or None if model is unknown
-    """
-    if custom_tokens is not None:
-        return custom_tokens
-
-    # Exact match in dictionary
-    if model_name in THINKING_LIMITS:
-        return THINKING_LIMITS[model_name]
-
-    # Try without provider prefix (for OpenRouter models)
-    if "/" in model_name:
-        base_model = model_name.split("/", 1)[1]
-        if base_model in THINKING_LIMITS:
-            return THINKING_LIMITS[base_model]
-
-    # Unknown model without override - return None to disable thinking
+    # Unknown mode - default to fast
     return None

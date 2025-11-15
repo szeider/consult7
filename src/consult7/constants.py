@@ -28,19 +28,17 @@ DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
 LLM_CALL_TIMEOUT = 600.0  # 10 minutes - very generous timeout for LLM calls
 
 # Application constants
-SERVER_VERSION = "2.1.0"
+SERVER_VERSION = "3.0.0"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
-MIN_ARGS = 2
+MIN_ARGS = 1
 
 # Output token constants
 DEFAULT_OUTPUT_TOKENS = 8_000  # Default max output tokens (~300 lines of code)
 SMALL_OUTPUT_TOKENS = 4_000  # Output tokens for smaller models
 SMALL_MODEL_THRESHOLD = 100_000  # Context size threshold for small models
 
-# Test models for each provider
+# Test model for OpenRouter
 TEST_MODELS = {
-    "openrouter": "google/gemini-2.5-flash-preview-05-20",
-    "google": "gemini-2.0-flash-exp",
-    "openai": "gpt-4o-mini|128k",
+    "openrouter": "openai/gpt-5.1",
 }

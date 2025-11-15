@@ -1,10 +1,14 @@
 # Consult7 MCP Server
 
-**Consult7** is a Model Context Protocol (MCP) server that enables AI agents to consult large context window models for analyzing extensive file collections - entire codebases, document repositories, or mixed content that exceed the current agent's context limits. Supports providers *Openrouter*, *OpenAI*, and *Google*.
+**Consult7** is a Model Context Protocol (MCP) server that enables AI agents to consult large context window models via [OpenRouter](https://openrouter.ai) for analyzing extensive file collections - entire codebases, document repositories, or mixed content that exceed the current agent's context limits.
 
 ## Why Consult7?
 
-When working with AI agents that have limited context windows (like Claude with 200K tokens), **Consult7** allows them to leverage models with massive context windows to analyze large codebases or document collections that would otherwise be impossible to process in a single query.
+**Consult7** enables any MCP-compatible agent to offload file analysis to large context models (up to 2M tokens). Useful when:
+- Agent's current context is full
+- Task requires specialized model capabilities
+- Need to analyze large codebases in a single query
+- Want to compare results from different models
 
 > "For Claude Code users, Consult7 is a game changer."
 
@@ -14,31 +18,24 @@ When working with AI agents that have limited context windows (like Claude with 
 
 ## Example Use Cases
 
-### Summarize an entire codebase
+### Quick codebase summary
 
 * **Files:** `["/Users/john/project/src/*.py", "/Users/john/project/lib/*.py"]`
 * **Query:** "Summarize the architecture and main components of this Python project"
-* **Model:** `"gemini-2.5-flash"`
+* **Model:** `"google/gemini-2.5-flash"`
+* **Mode:** `"fast"`
 
-### Find specific method definitions
-* **Files:** `["/Users/john/backend/src/*.py", "/Users/john/backend/auth/*.js"]`
-* **Query:** "Find the implementation of the authenticate_user method and explain how it handles password verification"
-* **Model:** `"gemini-2.5-pro"`
-
-### Analyze test coverage
-* **Files:** `["/Users/john/project/tests/*_test.py", "/Users/john/project/src/*.py"]`
-* **Query:** "List all the test files and identify which components lack test coverage"
-* **Model:** `"gemini-2.5-flash"`
-
-### Complex analysis with thinking mode
+### Deep analysis with reasoning
 * **Files:** `["/Users/john/webapp/src/*.py", "/Users/john/webapp/auth/*.py", "/Users/john/webapp/api/*.js"]`
 * **Query:** "Analyze the authentication flow across this codebase. Think step by step about security vulnerabilities and suggest improvements"
-* **Model:** `"gemini-2.5-flash|thinking"`
+* **Model:** `"anthropic/claude-sonnet-4.5"`
+* **Mode:** `"think"`
 
 ### Generate a report saved to file
 * **Files:** `["/Users/john/project/src/*.py", "/Users/john/project/tests/*.py"]`
 * **Query:** "Generate a comprehensive code review report with architecture analysis, code quality assessment, and improvement recommendations"
-* **Model:** `"gemini-2.5-pro"`
+* **Model:** `"google/gemini-2.5-pro"`
+* **Mode:** `"think"`
 * **Output File:** `"/Users/john/reports/code_review.md"`
 * **Result:** Returns `"Result has been saved to /Users/john/reports/code_review.md"` instead of flooding the agent's context
 
@@ -49,14 +46,7 @@ When working with AI agents that have limited context windows (like Claude with 
 Simply run:
 
 ```bash
-# OpenRouter
-claude mcp add -s user consult7 uvx -- consult7 openrouter your-api-key
-
-# Google AI
-claude mcp add -s user consult7 uvx -- consult7 google your-api-key
-
-# OpenAI
-claude mcp add -s user consult7 uvx -- consult7 openai your-api-key
+claude mcp add -s user consult7 uvx -- consult7 your-openrouter-api-key
 ```
 
 ### Claude Desktop
@@ -69,105 +59,65 @@ Add to your Claude Desktop configuration file:
     "consult7": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["consult7", "openrouter", "your-api-key"]
+      "args": ["consult7", "your-openrouter-api-key"]
     }
   }
 }
 ```
 
-Replace `openrouter` with your provider choice (`google` or `openai`) and `your-api-key` with your actual API key.
+Replace `your-openrouter-api-key` with your actual OpenRouter API key.
 
 No installation required - `uvx` automatically downloads and runs consult7 in an isolated environment.
-
 
 ## Command Line Options
 
 ```bash
-uvx consult7 <provider> <api-key> [--test]
+uvx consult7 <api-key> [--test]
 ```
 
-- `<provider>`: Required. Choose from `openrouter`, `google`, or `openai`
-- `<api-key>`: Required. Your API key for the chosen provider
+- `<api-key>`: Required. Your OpenRouter API key
 - `--test`: Optional. Test the API connection
 
-The model is specified when calling the tool, not at startup. The server shows example models for your provider on startup.
+The model and mode are specified when calling the tool, not at startup.
 
-### Model Examples
+## Supported Models
 
-#### Google
-Standard models:
-- `"gemini-2.5-flash"` - Fast model
-- `"gemini-2.5-flash-lite"` - Ultra fast lite model
-- `"gemini-2.5-pro"` - Intelligent model
-- `"gemini-2.0-flash-exp"` - Experimental model
+Consult7 supports **all 500+ models** available on OpenRouter. Below are the flagship models with optimized dynamic file size limits:
 
-With thinking mode (add `|thinking` suffix):
-- `"gemini-2.5-flash|thinking"` - Fast with deep reasoning
-- `"gemini-2.5-flash-lite|thinking"` - Ultra fast with deep reasoning
-- `"gemini-2.5-pro|thinking"` - Intelligent with deep reasoning
+| Model | Context | Use Case |
+|-------|---------|----------|
+| `openai/gpt-5.1` | 400k | Latest GPT, balanced performance |
+| `google/gemini-2.5-pro` | 1M | Best for complex analysis |
+| `google/gemini-2.5-flash` | 1M | Fast, good for most tasks |
+| `google/gemini-2.5-flash-lite` | 1M | Ultra fast, simple queries |
+| `anthropic/claude-sonnet-4.5` | 1M | Excellent reasoning |
+| `anthropic/claude-opus-4.1` | 200k | Best quality, slower |
+| `x-ai/grok-4` | 256k | Alternative reasoning model |
+| `x-ai/grok-4-fast` | 2M | Largest context window |
 
-#### OpenRouter
-Standard models:
-- `"google/gemini-2.5-pro"` - Intelligent, 1M context
-- `"google/gemini-2.5-flash"` - Fast, 1M context
-- `"google/gemini-2.5-flash-lite"` - Ultra fast, 1M context
-- `"anthropic/claude-sonnet-4"` - Claude Sonnet, 200k context
-- `"anthropic/claude-opus-4.1"` - Claude Opus 4.1, 200k context
-- `"openai/gpt-5"` - GPT-5, 400k context
-- `"openai/gpt-4.1"` - GPT-4.1, 1M+ context
+You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the [full model list](https://openrouter.ai/models). File size limits are automatically calculated based on each model's context window.
 
-With reasoning mode (add `|thinking` suffix):
-- `"anthropic/claude-sonnet-4|thinking"` - Claude with 31,999 reasoning tokens
-- `"anthropic/claude-opus-4.1|thinking"` - Opus 4.1 with reasoning
-- `"google/gemini-2.5-flash-lite|thinking"` - Ultra fast with reasoning
-- `"openai/gpt-5|thinking"` - GPT-5 with reasoning
-- `"openai/gpt-4.1|thinking"` - GPT-4.1 with reasoning effort=high
+## Performance Modes
 
-#### OpenAI
-Standard models (include context length):
-- `"gpt-5|400k"` - GPT-5, 400k context
-- `"gpt-5-mini|400k"` - GPT-5 Mini, faster
-- `"gpt-5-nano|400k"` - GPT-5 Nano, ultra fast
-- `"gpt-4.1-2025-04-14|1047576"` - 1M+ context, very fast
-- `"gpt-4.1-nano-2025-04-14|1047576"` - 1M+ context, ultra fast
-- `"o3-2025-04-16|200k"` - Advanced reasoning model
-- `"o4-mini-2025-04-16|200k"` - Fast reasoning model
-
-O-series models with |thinking marker:
-- `"o1-mini|128k|thinking"` - Mini reasoning with |thinking marker
-- `"o3-2025-04-16|200k|thinking"` - Advanced reasoning with |thinking marker
-
-**Note:** For OpenAI, |thinking is only supported on o-series models and serves as an informational marker. The models use reasoning tokens automatically.
-
-**Advanced:** You can specify custom thinking tokens with `|thinking=30000` but this is rarely needed. 
+- **`fast`**: No reasoning - quick answers, simple tasks
+- **`mid`**: Moderate reasoning - code reviews, bug analysis
+- **`think`**: Maximum reasoning - security audits, complex refactoring
 
 ## File Specification Rules
 
-When using the consultation tool, you provide a list of file paths with these rules:
+- **Absolute paths only**: `/Users/john/project/src/*.py`
+- **Wildcards in filenames only**: `/Users/john/project/*.py` (not in directory paths)
+- **Extension required with wildcards**: `*.py` not `*`
+- **Mix files and patterns**: `["/path/src/*.py", "/path/README.md", "/path/tests/*_test.py"]`
 
-1. **All paths must be absolute** (start with `/`)
-   - ✅ Good: `/Users/john/project/src/*.py`
-   - ❌ Bad: `src/*.py` or `./src/*.py`
+**Common patterns:**
+- All Python files: `/path/to/dir/*.py`
+- Test files: `/path/to/tests/*_test.py` or `/path/to/tests/test_*.py`
+- Multiple extensions: `["/path/*.js", "/path/*.ts"]`
 
-2. **Wildcards (`*`) only allowed in filenames**, not in directory paths
-   - ✅ Good: `/Users/john/project/*.py`
-   - ❌ Bad: `/Users/*/project/*.py` or `/Users/john/**/*.py`
+**Automatically ignored:** `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`
 
-3. **Must specify extension when using wildcards**
-   - ✅ Good: `/Users/john/project/*.py`
-   - ❌ Bad: `/Users/john/project/*`
-
-4. **Mix specific files and patterns freely**
-   - ✅ Good: `["/path/src/*.py", "/path/README.md", "/path/tests/*_test.py"]`
-
-5. **Common patterns:**
-   - All Python files in a directory: `/path/to/dir/*.py`
-   - Test files: `/path/to/tests/*_test.py` or `/path/to/tests/test_*.py`
-   - Multiple extensions: Use multiple patterns like `["/path/*.js", "/path/*.ts"]`
-
-The tool automatically ignores: `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`
-
-**Size limits:** 1MB per file, 4MB total (optimized for ~1M token context windows)
+**Size limits:** Dynamic based on model context window (e.g., Grok 4 Fast: ~8MB, GPT-5.1: ~1.5MB)
 
 ## Tool Parameters
 
@@ -175,30 +125,75 @@ The consultation tool accepts the following parameters:
 
 - **files** (required): List of absolute file paths or patterns with wildcards in filenames only
 - **query** (required): Your question or instruction for the LLM to process the files
-- **model** (required): The LLM model to use (see Model Examples above for each provider)
+- **model** (required): The LLM model to use (see Supported Models above)
+- **mode** (required): Performance mode - `fast`, `mid`, or `think`
 - **output_file** (optional): Absolute path to save the response to a file instead of returning it
   - If the file exists, it will be saved with `_updated` suffix (e.g., `report.md` → `report_updated.md`)
   - When specified, returns only: `"Result has been saved to /path/to/file"`
   - Useful for generating reports, documentation, or analyses without flooding the agent's context
 
+## Usage Examples
+
+### Via MCP in Claude Code
+
+Claude Code will automatically use the tool with proper parameters:
+
+```json
+{
+  "files": ["/Users/john/project/src/*.py"],
+  "query": "Explain the main architecture",
+  "model": "google/gemini-2.5-flash",
+  "mode": "mid"
+}
+```
+
+### Via Python API
+
+```python
+from consult7.consultation import consultation_impl
+
+result = await consultation_impl(
+    files=["/path/to/file.py"],
+    query="Explain this code",
+    model="google/gemini-2.5-flash",
+    mode="mid",  # fast, mid, or think
+    provider="openrouter",
+    api_key="sk-or-v1-..."
+)
+```
+
 ## Testing
 
 ```bash
-# Test OpenRouter
-uvx consult7 openrouter sk-or-v1-... --test
-
-# Test Google AI
-uvx consult7 google AIza... --test
-
-# Test OpenAI
-uvx consult7 openai sk-proj-... --test
+# Test OpenRouter connection
+uvx consult7 sk-or-v1-your-api-key --test
 ```
 
 ## Uninstalling
 
-To remove consult7 from Claude Code (or before reinstalling):
+To remove consult7 from Claude Code:
 
 ```bash
 claude mcp remove consult7 -s user
 ```
 
+## Version History
+
+### v3.0.0
+- Removed Google and OpenAI direct providers - now OpenRouter only
+- Removed `|thinking` suffix - use `mode` parameter instead (now required)
+- Clean `mode` parameter API: `fast`, `mid`, `think`
+- Simplified CLI from `consult7 <provider> <key>` to `consult7 <key>`
+- Better MCP integration with enum validation for modes
+- Dynamic file size limits based on model context window
+
+### v2.1.0
+- Added `output_file` parameter to save responses to files
+
+### v2.0.0
+- New file list interface with simplified validation
+- Reduced file size limits to realistic values
+
+## License
+
+MIT

@@ -81,31 +81,23 @@ async def main():
     # Validate arguments
     if len(args) < MIN_ARGS:
         print("Error: Missing required arguments")
-        print("Usage: consult7 <provider> <api-key> [--test]")
+        print("Usage: consult7 <api-key> [--test]")
         print()
-        print("Providers: openrouter, google, openai")
+        print("Note: Uses OpenRouter as the model provider")
         print()
         print("Examples:")
-        print("  consult7 openrouter sk-or-v1-...")
-        print("  consult7 google AIza...")
-        print("  consult7 openai sk-proj-...")
-        print("  consult7 openrouter sk-or-v1-... --test")
+        print("  consult7 sk-or-v1-...")
+        print("  consult7 sk-or-v1-... --test")
         sys.exit(EXIT_FAILURE)
 
     if len(args) > MIN_ARGS:
         print(f"Error: Too many arguments. Expected {MIN_ARGS}, got {len(args)}")
-        print("Usage: consult7 <provider> <api-key> [--test]")
+        print("Usage: consult7 <api-key> [--test]")
         sys.exit(EXIT_FAILURE)
 
-    # Parse provider and api key
-    provider = args[0]
-    api_key = args[1]
-
-    # Validate provider
-    if provider not in ["openrouter", "google", "openai"]:
-        print(f"Error: Invalid provider '{provider}'")
-        print("Valid providers: openrouter, google, openai")
-        sys.exit(1)
+    # Parse api key - provider is always openrouter
+    api_key = args[0]
+    provider = "openrouter"
 
     # Create server with stored configuration
     server = Consult7Server("consult7", api_key, provider)
@@ -135,12 +127,20 @@ async def main():
                                 ToolDescriptions.get_model_parameter_description(server.provider)
                             ),
                         },
+                        "mode": {
+                            "type": "string",
+                            "enum": ["fast", "mid", "think"],
+                            "description": (
+                                "Performance mode: 'fast' (no reasoning, fastest), "
+                                "'mid' (moderate reasoning), 'think' (maximum reasoning)"
+                            ),
+                        },
                         "output_file": {
                             "type": "string",
                             "description": ToolDescriptions.get_output_file_description(),
                         },
                     },
-                    "required": ["files", "query", "model"],
+                    "required": ["files", "query", "model", "mode"],
                 },
             )
         ]
@@ -154,6 +154,7 @@ async def main():
                     arguments["files"],
                     arguments["query"],
                     arguments["model"],
+                    arguments["mode"],
                     server.provider,
                     server.api_key,
                     arguments.get("output_file"),
@@ -193,8 +194,6 @@ async def main():
         logger.info(f"Example models for {server.provider}:")
         for example in examples:
             logger.info(f"  - {example}")
-        if server.provider == "openai":
-            logger.info("  Note: Include context length with | separator")
 
     # Run test mode if requested
     if test_mode:

@@ -4,20 +4,18 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consult7"
-version = "2.1.0"
-description = "MCP server for consulting large context window models to analyze extensive file collections"
+version = "3.0.0"
+description = "MCP server for consulting large context window models to analyze extensive file collections via OpenRouter"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Stefan Szeider", email = "stefan@szeider.net"}
 ]
-keywords = ["mcp", "llm", "code-analysis", "large-context"]
+keywords = ["mcp", "llm", "code-analysis", "large-context", "openrouter"]
 dependencies = [
     "mcp>=1.9.4",
     "httpx>=0.28.1",
-    "google-genai>=1.19.0",
-    "openai>=1.88.0",
 ]
 
 [project.urls]

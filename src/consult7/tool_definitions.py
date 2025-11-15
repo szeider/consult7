@@ -6,38 +6,14 @@ class ToolDescriptions:
 
     MODEL_EXAMPLES = {
         "openrouter": [
-            '"google/gemini-2.5-pro" (intelligent, 1M context)',
-            '"google/gemini-2.5-flash" (fast, 1M context)',
-            '"google/gemini-2.5-flash-lite" (ultra fast, 1M context)',
-            '"anthropic/claude-sonnet-4" (Claude Sonnet, 200k context)',
+            '"openai/gpt-5.1" (GPT-5.1, 400k context)',
+            '"google/gemini-2.5-pro" (Gemini Pro, 1M context)',
+            '"google/gemini-2.5-flash" (Gemini Flash, 1M context)',
+            '"google/gemini-2.5-flash-lite" (Gemini Flash Lite, 1M context)',
+            '"anthropic/claude-sonnet-4.5" (Claude Sonnet 4.5, 1M context)',
             '"anthropic/claude-opus-4.1" (Claude Opus 4.1, 200k context)',
-            '"openai/gpt-5" (GPT-5, 400k context)',
-            '"openai/gpt-4.1" (GPT-4.1, 1M+ context)',
-            '"anthropic/claude-sonnet-4|thinking" (Claude with 31,999 tokens)',
-            '"anthropic/claude-opus-4.1|thinking" (Opus 4.1 with reasoning)',
-            '"google/gemini-2.5-flash-lite|thinking" (ultra fast with reasoning)',
-            '"openai/gpt-5|thinking" (GPT-5 with reasoning)',
-            '"openai/gpt-4.1|thinking" (GPT-4.1 with reasoning effort=high)',
-        ],
-        "google": [
-            '"gemini-2.5-flash" (fast, standard mode)',
-            '"gemini-2.5-flash-lite" (ultra fast, lite model)',
-            '"gemini-2.5-pro" (intelligent, standard mode)',
-            '"gemini-2.0-flash-exp" (experimental model)',
-            '"gemini-2.5-flash|thinking" (fast with deep reasoning)',
-            '"gemini-2.5-flash-lite|thinking" (ultra fast with deep reasoning)',
-            '"gemini-2.5-pro|thinking" (intelligent with deep reasoning)',
-        ],
-        "openai": [
-            '"gpt-5|400k" (GPT-5, 400k context)',
-            '"gpt-5-mini|400k" (GPT-5 Mini, faster)',
-            '"gpt-5-nano|400k" (GPT-5 Nano, ultra fast)',
-            '"gpt-4.1-2025-04-14|1047576" (1M+ context, very fast)',
-            '"gpt-4.1-nano-2025-04-14|1047576" (1M+ context, ultra fast)',
-            '"o3-2025-04-16|200k" (advanced reasoning model)',
-            '"o4-mini-2025-04-16|200k" (fast reasoning model)',
-            '"o1-mini|128k|thinking" (mini reasoning with |thinking marker)',
-            '"o3-2025-04-16|200k|thinking" (advanced reasoning with |thinking marker)',
+            '"x-ai/grok-4" (Grok 4, 256k context)',
+            '"x-ai/grok-4-fast" (Grok 4 Fast, 2M context)',
         ],
     }
 
@@ -46,98 +22,61 @@ class ToolDescriptions:
         """Get the main description for the consultation tool."""
         provider_notes = cls._get_provider_notes(provider)
 
-        return f"""Analyze files with an LLM by providing a list of file paths.
+        return f"""Analyze files with an LLM - provide absolute file paths, query, model, and mode.
 
-Provide a list of absolute file paths (with optional wildcards in filenames only).
-The tool collects these files, formats them, and sends them to your chosen LLM
-along with your query.
+STATELESS: Each call must contain complete absolute paths. No context is remembered.
+
+TIPS:
+- Hard questions: Spawn 3 parallel calls with varied query formulations
+- Long instructions: Put them in a file, include in files list, keep query short
+
+Quick mnemonics:
+- gptt = openai/gpt-5.1 + think (latest GPT, deep reasoning)
+- gemt = google/gemini-2.5-pro + think (Gemini Pro, deep reasoning)
+- gemf = google/gemini-2.5-flash-lite + fast (ultra fast)
 
 {provider_notes}
 
-File specification rules:
-- All paths must be absolute (start with /)
-- Wildcards (*) allowed ONLY in filenames, not in directory paths
-- Must specify extension when using wildcards (e.g., *.py not just *)
-- Mix specific files and patterns: ["/path/src/*.py", "/path/README.md"]
-
-Examples:
-- Single file: ["/Users/john/project/main.py"]
-- Multiple files: ["/path/src/*.py", "/path/tests/*.py", "/path/README.md"]
-- All Python files in a directory: ["/Users/john/project/src/*.py"]
-
-Automatically ignores: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules
-Size limits: 1MB per file, 4MB total (optimized for ~1M token context)"""
+Files: Absolute paths, wildcards only in filenames (e.g., /path/*.py not /*/path/*.py)
+Ignores: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules
+Limits: Dynamic per model - each model optimized for its full context capacity"""
 
     @classmethod
     def get_model_parameter_description(cls, provider: str) -> str:
         """Get the model parameter description with provider-specific examples."""
         examples = cls.MODEL_EXAMPLES.get(provider, [])
 
-        if provider == "openai":
-            model_desc = (
-                "The model to use. Include context length with | "
-                'separator (e.g., "model-name|200k").\nExamples:'
-            )
-        else:
-            model_desc = "The model to use. Examples:"
+        # Show all 8 flagship models
+        model_desc = "Model name. Options:\n"
+        for example in examples:
+            model_desc += f"  {example}\n"
 
-        # Add examples on new lines, but check where to add |thinking note
-        thinking_examples_start = -1
-        for i, example in enumerate(examples):
-            if "|thinking" in example and thinking_examples_start == -1:
-                thinking_examples_start = i
-                # Add the |thinking note before the first thinking example
-                if provider in ["google", "openrouter"]:
-                    suffix_type = "thinking" if provider == "google" else "reasoning"
-                    model_desc += f"\n\nAdd |thinking suffix for {suffix_type} mode:"
-                elif provider == "openai":
-                    model_desc += "\n\n|thinking suffix (o-series models only):"
-            model_desc += f"\n  {example}"
-
-        return model_desc
+        return model_desc.rstrip()
 
     @classmethod
     def get_files_description(cls) -> str:
         """Get the files parameter description."""
-        return (
-            "List of absolute file paths or patterns. Examples:\n"
-            '  - Specific file: "/Users/john/project/main.py"\n'
-            '  - Directory with wildcard: "/Users/john/project/src/*.py"\n'
-            '  - Multiple patterns: ["/path/src/*.js", "/path/lib/*.js", '
-            '"/path/README.md"]\n'
-            "Rules: Paths must be absolute, wildcards only in filenames, "
-            "extension required with wildcards"
-        )
+        return 'Absolute file paths or patterns. Example: ["/path/src/*.py", "/path/README.md"]'
 
     @classmethod
     def get_query_description(cls) -> str:
         """Get the query parameter description."""
-        return "Your question about the code (e.g., 'Which functions handle authentication?')"
+        return "Your question about the files"
 
     @classmethod
     def get_output_file_description(cls) -> str:
         """Get the output_file parameter description."""
         return (
-            "Optional: Absolute path to save the LLM response to a file instead of returning it. "
-            "If the file exists, it will be saved with '_updated' suffix (e.g., report.md → report_updated.md). "
-            "When specified, the tool returns only a brief confirmation message."
+            "Optional: Save response to file (adds _updated suffix if exists). "
+            "Tip: For code files, prompt the LLM to return raw code without markdown formatting"
         )
 
     @classmethod
     def _get_provider_notes(cls, provider: str) -> str:
         """Get provider-specific notes."""
-        if provider == "openai":
-            return ""  # Move note to model parameter description
-        elif provider == "google":
-            return (
-                "Thinking Mode: Add |thinking to any model for deep reasoning "
-                "(e.g., gemini-2.5-flash|thinking).\n"
-                "Advanced: For custom thinking limits, use |thinking=30000"
-            )
-        elif provider == "openrouter":
-            return (
-                "Reasoning Mode: Add |thinking suffix to enable deeper analysis.\n"
-                "Advanced: For custom limits, use |thinking=30000"
-            )
-        else:
-            return "Note: Model context windows are auto-detected from the API"
+        return (
+            "Performance Modes (use 'mode' parameter):\n"
+            "- fast: No reasoning, fastest\n"
+            "- mid: Moderate reasoning\n"
+            "- think: Maximum reasoning for deepest analysis"
+        )

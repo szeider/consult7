@@ -74,8 +74,14 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# Hidden files/folders
+# Hidden files/folders (except essential ones)
 .*
+!.gitignore
+!.github/
+
+# MCP config files (contain API keys!)
+.mcp.json
+*.mcp.json
 
 # Project specific
 CLAUDE.md

@@ -114,6 +114,7 @@ class OpenRouterProvider(BaseProvider):
         # Binary approach for reasoning mode - reserve full amount upfront
         reasoning_budget_actual = 0
         is_openai_model = thinking_budget == "effort"
+        is_gemini3_model = thinking_budget == "enabled"
 
         if thinking_mode:
             if thinking_budget == "effort":
@@ -121,6 +122,10 @@ class OpenRouterProvider(BaseProvider):
                 # For OpenAI models, reasoning uses part of the output budget
                 # We don't increase max_output_tokens
                 reasoning_budget_actual = 0  # Signal that we're using effort mode
+            elif thinking_budget == "enabled":
+                # Gemini 3 Pro uses enabled=true, reasoning is dynamic
+                # No need to adjust max_output_tokens
+                reasoning_budget_actual = 0  # Signal that we're using enabled mode
             else:
                 # Non-OpenAI models: use the provided reasoning budget
                 reasoning_budget_actual = thinking_budget
@@ -208,8 +213,11 @@ class OpenRouterProvider(BaseProvider):
                 data["reasoning"] = {"effort": "high"}
                 # Note: This uses ~80% of the 8k output budget for reasoning
                 # Total context reduction is still just 8k (not additional)
+            elif is_gemini3_model:
+                # Gemini 3 Pro: use enabled=true
+                data["reasoning"] = {"enabled": True}
             else:
-                # Anthropic, Gemini, and others: use max_tokens
+                # Anthropic, Gemini 2.5, and others: use max_tokens
                 data["reasoning"] = {"max_tokens": reasoning_budget_actual}
 
         try:
@@ -235,13 +243,23 @@ class OpenRouterProvider(BaseProvider):
 
                 llm_response = process_llm_response(result["choices"][0]["message"]["content"])
 
-                # Return reasoning budget (for OpenAI effort models, return a special value)
+                # Return reasoning budget (for special reasoning modes, return markers)
                 if thinking_mode and is_openai_model:
                     return (
                         llm_response,
                         None,
                         -1,
                     )  # Special marker for effort-based reasoning
+                elif thinking_mode and is_gemini3_model:
+                    # For Gemini 3 Pro, extract actual reasoning tokens from usage
+                    usage = result.get("usage", {})
+                    completion_details = usage.get("completion_tokens_details", {})
+                    reasoning_tokens = completion_details.get("reasoning_tokens", 0)
+                    return (
+                        llm_response,
+                        None,
+                        -2 if reasoning_tokens > 0 else -3,  # -2 for enabled with reasoning, -3 for enabled without
+                    )
                 else:
                     return (
                         llm_response,

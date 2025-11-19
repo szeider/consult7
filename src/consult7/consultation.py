@@ -111,6 +111,12 @@ async def consultation_impl(
         if thinking_budget == -1:
             # Special marker for OpenAI effort-based reasoning
             token_info += ", reasoning mode: effort=high (~80% of output budget)"
+        elif thinking_budget == -2:
+            # Special marker for Gemini 3 Pro with reasoning enabled
+            token_info += ", reasoning mode: enabled=true (dynamic reasoning)"
+        elif thinking_budget == -3:
+            # Special marker for Gemini 3 Pro without reasoning
+            token_info += ", reasoning mode: enabled=true (no reasoning used)"
         elif thinking_budget > 0:
             # Calculate percentage of maximum possible reasoning tokens
             # Import these only when needed to avoid circular imports

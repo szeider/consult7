@@ -7,7 +7,7 @@ class ToolDescriptions:
     MODEL_EXAMPLES = {
         "openrouter": [
             '"openai/gpt-5.1" (GPT-5.1, 400k context)',
-            '"google/gemini-2.5-pro" (Gemini Pro, 1M context)',
+            '"google/gemini-3-pro-preview" (Gemini 3 Pro, 1M context, flagship reasoning)',
             '"google/gemini-2.5-flash" (Gemini Flash, 1M context)',
             '"google/gemini-2.5-flash-lite" (Gemini Flash Lite, 1M context)',
             '"anthropic/claude-sonnet-4.5" (Claude Sonnet 4.5, 1M context)',
@@ -32,8 +32,10 @@ TIPS:
 
 Quick mnemonics:
 - gptt = openai/gpt-5.1 + think (latest GPT, deep reasoning)
-- gemt = google/gemini-2.5-pro + think (Gemini Pro, deep reasoning)
+- gemt = google/gemini-3-pro-preview + think (Gemini 3 Pro, flagship reasoning)
+- grot = x-ai/grok-4 + think (Grok 4, deep reasoning)
 - gemf = google/gemini-2.5-flash-lite + fast (ultra fast)
+- ULTRA = call GEMT, GPTT, and GROT IN PARALLEL (3 frontier models for maximum insight)
 
 {provider_notes}
 

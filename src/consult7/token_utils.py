@@ -21,6 +21,7 @@ THINKING_LIMITS = {
     # OpenAI models - use effort-based reasoning (not token counts)
     "openai/gpt-5.1": "effort",
     # Google Gemini models
+    "google/gemini-3-pro-preview": "enabled",  # Uses reasoning.enabled=true
     "google/gemini-2.5-pro": 32_768,
     "google/gemini-2.5-flash": 24_576,
     "google/gemini-2.5-flash-lite": 24_576,
@@ -56,6 +57,9 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
     if thinking_budget_value == "effort":
         # OpenAI effort-based: reserve ~40% of output budget for reasoning
         thinking_budget = int(output_reserve * 0.4)
+    elif thinking_budget_value == "enabled":
+        # Gemini 3 Pro: reasoning is dynamic, reserve conservative amount
+        thinking_budget = int(output_reserve * 0.3)
     elif thinking_budget_value is not None:
         thinking_budget = thinking_budget_value
     else:
@@ -107,7 +111,7 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
         mode: Performance mode - "fast", "mid", or "think"
 
     Returns:
-        Thinking token budget, "effort" for OpenAI models, or None for fast mode
+        Thinking token budget, "effort" for OpenAI models, "enabled" for Gemini 3 Pro, or None for fast mode
     """
     # Fast mode: no thinking
     if mode == "fast":
@@ -123,6 +127,10 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
     # OpenAI models use effort-based reasoning
     if limit == "effort":
         return "effort"
+
+    # Gemini 3 Pro uses enabled=true reasoning
+    if limit == "enabled":
+        return "enabled"
 
     # Mid mode: moderate reasoning (50% of max)
     if mode == "mid":

@@ -39,6 +39,19 @@
 * **Output File:** `"/Users/john/reports/code_review.md"`
 * **Result:** Returns `"Result has been saved to /Users/john/reports/code_review.md"` instead of flooding the agent's context
 
+## Featured Model: Gemini 3 Pro
+
+Consult7 now supports **Google's Gemini 3 Pro** (`google/gemini-3-pro-preview`) - the flagship reasoning model with a 1M context window and state-of-the-art performance on reasoning benchmarks.
+
+**Quick mnemonics for power users:**
+- **`gemt`** = Gemini 3 Pro + think mode (flagship reasoning)
+- **`gptt`** = GPT-5.1 + think mode (latest GPT)
+- **`grot`** = Grok 4 + think mode (alternative reasoning)
+- **`gemf`** = Gemini Flash Lite + fast mode (ultra fast)
+- **`ULTRA`** = Run GEMT, GPTT, and GROT in parallel for maximum insight
+
+These mnemonics make it easy to reference model+mode combinations in your queries.
+
 ## Installation
 
 ### Claude Code
@@ -186,6 +199,11 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.1.1
+- Improved documentation: Featured Gemini 3 Pro section before Installation
+- Added prominent mnemonic examples (gemt, gptt, grot, gemf, ULTRA)
+- Enhanced model table with Gemini 3 Pro as flagship reasoning model
 
 ### v3.1.0
 - Added `google/gemini-3-pro-preview` (1M context, flagship reasoning model)

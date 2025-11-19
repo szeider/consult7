@@ -87,6 +87,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | Model | Context | Use Case |
 |-------|---------|----------|
 | `openai/gpt-5.1` | 400k | Latest GPT, balanced performance |
+| `google/gemini-3-pro-preview` | 1M | **Flagship reasoning model** |
 | `google/gemini-2.5-pro` | 1M | Best for complex analysis |
 | `google/gemini-2.5-flash` | 1M | Fast, good for most tasks |
 | `google/gemini-2.5-flash-lite` | 1M | Ultra fast, simple queries |
@@ -94,6 +95,13 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | `anthropic/claude-opus-4.1` | 200k | Best quality, slower |
 | `x-ai/grok-4` | 256k | Alternative reasoning model |
 | `x-ai/grok-4-fast` | 2M | Largest context window |
+
+**Quick mnemonics:**
+- `gptt` = `openai/gpt-5.1` + `think` (latest GPT, deep reasoning)
+- `gemt` = `google/gemini-3-pro-preview` + `think` (Gemini 3 Pro, flagship reasoning)
+- `grot` = `x-ai/grok-4` + `think` (Grok 4, deep reasoning)
+- `gemf` = `google/gemini-2.5-flash-lite` + `fast` (ultra fast)
+- `ULTRA` = call GEMT, GPTT, and GROT IN PARALLEL (3 frontier models for maximum insight)
 
 You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the [full model list](https://openrouter.ai/models). File size limits are automatically calculated based on each model's context window.
 
@@ -178,6 +186,12 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.1.0
+- Added `google/gemini-3-pro-preview` (1M context, flagship reasoning model)
+- New mnemonics: `gemt` (Gemini 3 Pro), `grot` (Grok 4), `ULTRA` (parallel execution)
+- Implements `{"reasoning": {"enabled": true}}` API format for Gemini 3 Pro
+- All tests passing (6/6: 3 API tests, 3 integration tests)
 
 ### v3.0.0
 - Removed Google and OpenAI direct providers - now OpenRouter only

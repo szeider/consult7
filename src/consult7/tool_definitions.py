@@ -11,7 +11,7 @@ class ToolDescriptions:
             '"google/gemini-2.5-flash" (Gemini Flash, 1M context)',
             '"google/gemini-2.5-flash-lite" (Gemini Flash Lite, 1M context)',
             '"anthropic/claude-sonnet-4.5" (Claude Sonnet 4.5, 1M context)',
-            '"anthropic/claude-opus-4.1" (Claude Opus 4.1, 200k context)',
+            '"anthropic/claude-opus-4.5" (Claude Opus 4.5, 200k context)',
             '"x-ai/grok-4" (Grok 4, 256k context)',
             '"x-ai/grok-4-fast" (Grok 4 Fast, 2M context)',
         ],
@@ -34,8 +34,10 @@ Quick mnemonics:
 - gptt = openai/gpt-5.1 + think (latest GPT, deep reasoning)
 - gemt = google/gemini-3-pro-preview + think (Gemini 3 Pro, flagship reasoning)
 - grot = x-ai/grok-4 + think (Grok 4, deep reasoning)
+- oput = anthropic/claude-opus-4.5 + think (Claude Opus, deep reasoning)
+- opuf = anthropic/claude-opus-4.5 + fast (Claude Opus, no reasoning)
 - gemf = google/gemini-2.5-flash-lite + fast (ultra fast)
-- ULTRA = call GEMT, GPTT, and GROT IN PARALLEL (3 frontier models for maximum insight)
+- ULTRA = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight)
 
 {provider_notes}
 

@@ -27,7 +27,7 @@ THINKING_LIMITS = {
     "google/gemini-2.5-flash-lite": 24_576,
     # Anthropic Claude models
     "anthropic/claude-sonnet-4.5": 31_999,
-    "anthropic/claude-opus-4.1": 31_999,
+    "anthropic/claude-opus-4.5": 31_999,
     # X-AI Grok models - TBD (need to test)
     "x-ai/grok-4": 32_000,  # To be confirmed
     "x-ai/grok-4-fast": 32_000,  # To be confirmed

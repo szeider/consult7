@@ -6,7 +6,7 @@ class ToolDescriptions:
 
     MODEL_EXAMPLES = {
         "openrouter": [
-            '"openai/gpt-5.1" (GPT-5.1, 400k context)',
+            '"openai/gpt-5.2" (GPT-5.2, 400k context)',
             '"google/gemini-3-pro-preview" (Gemini 3 Pro, 1M context, flagship reasoning)',
             '"google/gemini-2.5-flash" (Gemini Flash, 1M context)',
             '"google/gemini-2.5-flash-lite" (Gemini Flash Lite, 1M context)',
@@ -31,7 +31,7 @@ TIPS:
 - Long instructions: Put them in a file, include in files list, keep query short
 
 Quick mnemonics:
-- gptt = openai/gpt-5.1 + think (latest GPT, deep reasoning)
+- gptt = openai/gpt-5.2 + think (latest GPT, deep reasoning)
 - gemt = google/gemini-3-pro-preview + think (Gemini 3 Pro, flagship reasoning)
 - grot = x-ai/grok-4 + think (Grok 4, deep reasoning)
 - oput = anthropic/claude-opus-4.5 + think (Claude Opus, deep reasoning)

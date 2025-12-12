@@ -45,7 +45,7 @@ Consult7 now supports **Google's Gemini 3 Pro** (`google/gemini-3-pro-preview`) 
 
 **Quick mnemonics for power users:**
 - **`gemt`** = Gemini 3 Pro + think mode (flagship reasoning)
-- **`gptt`** = GPT-5.1 + think mode (latest GPT)
+- **`gptt`** = GPT-5.2 + think mode (latest GPT)
 - **`grot`** = Grok 4 + think mode (alternative reasoning)
 - **`gemf`** = Gemini Flash Lite + fast mode (ultra fast)
 - **`ULTRA`** = Run GEMT, GPTT, and GROT in parallel for maximum insight
@@ -99,7 +99,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 
 | Model | Context | Use Case |
 |-------|---------|----------|
-| `openai/gpt-5.1` | 400k | Latest GPT, balanced performance |
+| `openai/gpt-5.2` | 400k | Latest GPT, balanced performance |
 | `google/gemini-3-pro-preview` | 1M | **Flagship reasoning model** |
 | `google/gemini-2.5-pro` | 1M | Best for complex analysis |
 | `google/gemini-2.5-flash` | 1M | Fast, good for most tasks |
@@ -110,7 +110,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | `x-ai/grok-4-fast` | 2M | Largest context window |
 
 **Quick mnemonics:**
-- `gptt` = `openai/gpt-5.1` + `think` (latest GPT, deep reasoning)
+- `gptt` = `openai/gpt-5.2` + `think` (latest GPT, deep reasoning)
 - `gemt` = `google/gemini-3-pro-preview` + `think` (Gemini 3 Pro, flagship reasoning)
 - `grot` = `x-ai/grok-4` + `think` (Grok 4, deep reasoning)
 - `oput` = `anthropic/claude-opus-4.5` + `think` (Claude Opus, deep reasoning)
@@ -140,7 +140,7 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 **Automatically ignored:** `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`
 
-**Size limits:** Dynamic based on model context window (e.g., Grok 4 Fast: ~8MB, GPT-5.1: ~1.5MB)
+**Size limits:** Dynamic based on model context window (e.g., Grok 4 Fast: ~8MB, GPT-5.2: ~1.5MB)
 
 ## Tool Parameters
 

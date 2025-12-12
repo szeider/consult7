@@ -22,13 +22,13 @@ MODELS_URL = "https://openrouter.ai/api/v1/models"
 
 # API constants
 DEFAULT_TEMPERATURE = 0.7  # Default temperature for all providers
-OPENROUTER_TIMEOUT = 600.0  # 10 minutes - very generous timeout for API calls
+OPENROUTER_TIMEOUT = 1000.0  # ~17 minutes - very generous timeout for API calls
 API_FETCH_TIMEOUT = 30.0  # 30 seconds for fetching model info
 DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
-LLM_CALL_TIMEOUT = 600.0  # 10 minutes - very generous timeout for LLM calls
+LLM_CALL_TIMEOUT = 1000.0  # ~17 minutes - very generous timeout for LLM calls
 
 # Application constants
-SERVER_VERSION = "3.1.2"
+SERVER_VERSION = "3.2.0"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 MIN_ARGS = 1
@@ -40,5 +40,5 @@ SMALL_MODEL_THRESHOLD = 100_000  # Context size threshold for small models
 
 # Test model for OpenRouter
 TEST_MODELS = {
-    "openrouter": "openai/gpt-5.1",
+    "openrouter": "openai/gpt-5.2",
 }

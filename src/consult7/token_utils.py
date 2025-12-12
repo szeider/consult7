@@ -19,7 +19,7 @@ TOKEN_ESTIMATION_BUFFER = 1.1  # 10% buffer for token estimation
 # Thinking/Reasoning Token Limits by Model - Officially Supported Models Only
 THINKING_LIMITS = {
     # OpenAI models - use effort-based reasoning (not token counts)
-    "openai/gpt-5.1": "effort",
+    "openai/gpt-5.2": "effort",
     # Google Gemini models
     "google/gemini-3-pro-preview": "enabled",  # Uses reasoning.enabled=true
     "google/gemini-2.5-pro": 32_768,

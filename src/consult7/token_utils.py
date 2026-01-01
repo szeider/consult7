@@ -20,11 +20,12 @@ TOKEN_ESTIMATION_BUFFER = 1.1  # 10% buffer for token estimation
 THINKING_LIMITS = {
     # OpenAI models - use effort-based reasoning (not token counts)
     "openai/gpt-5.2": "effort",
-    # Google Gemini models
-    "google/gemini-3-pro-preview": "enabled",  # Uses reasoning.enabled=true
+    # Google Gemini 3 models - use reasoning.enabled=true
+    "google/gemini-3-pro-preview": "enabled",
+    "google/gemini-3-flash-preview": "enabled",
+    # Google Gemini 2.5 models
     "google/gemini-2.5-pro": 32_768,
     "google/gemini-2.5-flash": 24_576,
-    "google/gemini-2.5-flash-lite": 24_576,
     # Anthropic Claude models
     "anthropic/claude-sonnet-4.5": 31_999,
     "anthropic/claude-opus-4.5": 31_999,

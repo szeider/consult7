@@ -45,6 +45,7 @@ async def consultation_impl(
     provider: str = "openrouter",
     api_key: Optional[str] = None,
     output_file: Optional[str] = None,
+    zdr: bool = False,
 ) -> str:
     """Implementation of the consultation tool logic."""
     # Expand file patterns
@@ -97,6 +98,7 @@ async def consultation_impl(
                 api_key,
                 thinking_mode,
                 thinking_budget_value,
+                zdr,
             )
     except asyncio.TimeoutError:
         return (

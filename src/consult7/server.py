@@ -139,6 +139,10 @@ async def main():
                             "type": "string",
                             "description": ToolDescriptions.get_output_file_description(),
                         },
+                        "zdr": {
+                            "type": "boolean",
+                            "description": ToolDescriptions.get_zdr_description(),
+                        },
                     },
                     "required": ["files", "query", "model", "mode"],
                 },
@@ -158,6 +162,7 @@ async def main():
                     server.provider,
                     server.api_key,
                     arguments.get("output_file"),
+                    arguments.get("zdr", False),
                 )
                 return [types.TextContent(type="text", text=result)]
             else:

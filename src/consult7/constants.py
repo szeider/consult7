@@ -28,7 +28,7 @@ DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
 LLM_CALL_TIMEOUT = 1000.0  # ~17 minutes - very generous timeout for LLM calls
 
 # Application constants
-SERVER_VERSION = "3.2.0"
+SERVER_VERSION = "3.3.0"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 MIN_ARGS = 1

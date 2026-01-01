@@ -22,7 +22,7 @@
 
 * **Files:** `["/Users/john/project/src/*.py", "/Users/john/project/lib/*.py"]`
 * **Query:** "Summarize the architecture and main components of this Python project"
-* **Model:** `"google/gemini-2.5-flash"`
+* **Model:** `"google/gemini-3-flash-preview"`
 * **Mode:** `"fast"`
 
 ### Deep analysis with reasoning
@@ -39,16 +39,18 @@
 * **Output File:** `"/Users/john/reports/code_review.md"`
 * **Result:** Returns `"Result has been saved to /Users/john/reports/code_review.md"` instead of flooding the agent's context
 
-## Featured Model: Gemini 3 Pro
+## Featured: Gemini 3 Models
 
-Consult7 now supports **Google's Gemini 3 Pro** (`google/gemini-3-pro-preview`) - the flagship reasoning model with a 1M context window and state-of-the-art performance on reasoning benchmarks.
+Consult7 supports **Google's Gemini 3** family:
+- **Gemini 3 Pro** (`google/gemini-3-pro-preview`) - Flagship reasoning model, 1M context
+- **Gemini 3 Flash** (`google/gemini-3-flash-preview`) - Ultra-fast model, 1M context
 
 **Quick mnemonics for power users:**
-- **`gemt`** = Gemini 3 Pro + think mode (flagship reasoning)
-- **`gptt`** = GPT-5.2 + think mode (latest GPT)
-- **`grot`** = Grok 4 + think mode (alternative reasoning)
-- **`gemf`** = Gemini Flash Lite + fast mode (ultra fast)
-- **`ULTRA`** = Run GEMT, GPTT, and GROT in parallel for maximum insight
+- **`gemt`** = Gemini 3 Pro + think (flagship reasoning)
+- **`gemf`** = Gemini 3 Flash + fast (ultra fast)
+- **`gptt`** = GPT-5.2 + think (latest GPT)
+- **`grot`** = Grok 4 + think (alternative reasoning)
+- **`ULTRA`** = Run GEMT, GPTT, GROT, and OPUT in parallel (4 frontier models)
 
 These mnemonics make it easy to reference model+mode combinations in your queries.
 
@@ -102,8 +104,8 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | `openai/gpt-5.2` | 400k | Latest GPT, balanced performance |
 | `google/gemini-3-pro-preview` | 1M | **Flagship reasoning model** |
 | `google/gemini-2.5-pro` | 1M | Best for complex analysis |
+| `google/gemini-3-flash-preview` | 1M | **Gemini 3 Flash, ultra fast** |
 | `google/gemini-2.5-flash` | 1M | Fast, good for most tasks |
-| `google/gemini-2.5-flash-lite` | 1M | Ultra fast, simple queries |
 | `anthropic/claude-sonnet-4.5` | 1M | Excellent reasoning |
 | `anthropic/claude-opus-4.5` | 200k | Best quality, slower |
 | `x-ai/grok-4` | 256k | Alternative reasoning model |
@@ -115,7 +117,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 - `grot` = `x-ai/grok-4` + `think` (Grok 4, deep reasoning)
 - `oput` = `anthropic/claude-opus-4.5` + `think` (Claude Opus, deep reasoning)
 - `opuf` = `anthropic/claude-opus-4.5` + `fast` (Claude Opus, no reasoning)
-- `gemf` = `google/gemini-2.5-flash-lite` + `fast` (ultra fast)
+- `gemf` = `google/gemini-3-flash-preview` + `fast` (Gemini 3 Flash, ultra fast)
 - `ULTRA` = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight)
 
 You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the [full model list](https://openrouter.ai/models). File size limits are automatically calculated based on each model's context window.
@@ -154,6 +156,10 @@ The consultation tool accepts the following parameters:
   - If the file exists, it will be saved with `_updated` suffix (e.g., `report.md` → `report_updated.md`)
   - When specified, returns only: `"Result has been saved to /path/to/file"`
   - Useful for generating reports, documentation, or analyses without flooding the agent's context
+- **zdr** (optional): Enable Zero Data Retention routing (default: `false`)
+  - When `true`, routes only to endpoints with ZDR policy (prompts not retained by provider)
+  - ZDR available: Gemini 3 Pro/Flash, Claude Opus 4.5, GPT-5
+  - Not available: GPT-5.2, Grok 4 (returns error)
 
 ## Usage Examples
 
@@ -165,8 +171,8 @@ Claude Code will automatically use the tool with proper parameters:
 {
   "files": ["/Users/john/project/src/*.py"],
   "query": "Explain the main architecture",
-  "model": "google/gemini-2.5-flash",
-  "mode": "mid"
+  "model": "google/gemini-3-flash-preview",
+  "mode": "fast"
 }
 ```
 
@@ -178,8 +184,8 @@ from consult7.consultation import consultation_impl
 result = await consultation_impl(
     files=["/path/to/file.py"],
     query="Explain this code",
-    model="google/gemini-2.5-flash",
-    mode="mid",  # fast, mid, or think
+    model="google/gemini-3-flash-preview",
+    mode="fast",  # fast, mid, or think
     provider="openrouter",
     api_key="sk-or-v1-..."
 )
@@ -202,16 +208,18 @@ claude mcp remove consult7 -s user
 
 ## Version History
 
-### v3.1.1
-- Improved documentation: Featured Gemini 3 Pro section before Installation
-- Added prominent mnemonic examples (gemt, gptt, grot, gemf, ULTRA)
-- Enhanced model table with Gemini 3 Pro as flagship reasoning model
+### v3.3.0
+- Fixed GPT-5.2 thinking mode truncation issue (switched to streaming)
+- Added `google/gemini-3-flash-preview` (Gemini 3 Flash, ultra fast)
+- Updated `gemf` mnemonic to use Gemini 3 Flash
+- Added `zdr` parameter for Zero Data Retention routing
+
+### v3.2.0
+- Updated to GPT-5.2 with effort-based reasoning
 
 ### v3.1.0
 - Added `google/gemini-3-pro-preview` (1M context, flagship reasoning model)
 - New mnemonics: `gemt` (Gemini 3 Pro), `grot` (Grok 4), `ULTRA` (parallel execution)
-- Implements `{"reasoning": {"enabled": true}}` API format for Gemini 3 Pro
-- All tests passing (6/6: 3 API tests, 3 integration tests)
 
 ### v3.0.0
 - Removed Google and OpenAI direct providers - now OpenRouter only

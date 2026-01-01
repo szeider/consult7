@@ -1,5 +1,6 @@
 """OpenRouter provider implementation for Consult7."""
 
+import json
 import logging
 from typing import Optional, Tuple
 import httpx
@@ -76,6 +77,7 @@ class OpenRouterProvider(BaseProvider):
         api_key: str,
         thinking_mode: bool = False,
         thinking_budget: Optional[int] = None,
+        zdr: bool = False,
     ) -> Tuple[str, Optional[str], Optional[int]]:
         """Call OpenRouter API with the content and query.
 
@@ -204,7 +206,12 @@ class OpenRouterProvider(BaseProvider):
             "messages": messages,
             "temperature": DEFAULT_TEMPERATURE,
             "max_tokens": max_output_tokens,
+            "stream": True,  # Use streaming to prevent timeout truncation
         }
+
+        # Add Zero Data Retention routing if requested
+        if zdr:
+            data["provider"] = {"zdr": True}
 
         # Add reasoning mode if thinking_mode is enabled
         if thinking_mode:
@@ -221,56 +228,99 @@ class OpenRouterProvider(BaseProvider):
                 data["reasoning"] = {"max_tokens": reasoning_budget_actual}
 
         try:
+            # Use streaming to keep connection alive during long reasoning
+            # This prevents intermediate proxy/server timeouts
+            collected_content = []
+            finish_reason = None
+
             async with httpx.AsyncClient() as client:
-                response = await client.post(
+                async with client.stream(
+                    "POST",
                     OPENROUTER_URL,
                     headers=headers,
                     json=data,
                     timeout=OPENROUTER_TIMEOUT,
+                ) as response:
+                    if response.status_code != 200:
+                        # Read error response body
+                        error_body = await response.aread()
+                        return (
+                            "",
+                            f"API error: {response.status_code} - {error_body.decode()}",
+                            None,
+                        )
+
+                    # Process SSE stream
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+
+                        # SSE format: "data: {...}" or "data: [DONE]"
+                        if line.startswith("data: "):
+                            data_str = line[6:]  # Remove "data: " prefix
+
+                            if data_str == "[DONE]":
+                                break
+
+                            try:
+                                chunk = json.loads(data_str)
+
+                                # Extract content from delta
+                                if "choices" in chunk and chunk["choices"]:
+                                    choice = chunk["choices"][0]
+                                    delta = choice.get("delta", {})
+                                    content = delta.get("content", "")
+                                    if content:
+                                        collected_content.append(content)
+
+                                    # Track finish_reason
+                                    if choice.get("finish_reason"):
+                                        finish_reason = choice["finish_reason"]
+
+                            except json.JSONDecodeError:
+                                # Skip malformed chunks
+                                continue
+
+            # Combine all chunks
+            full_response = "".join(collected_content)
+
+            if not full_response:
+                return "", "No content received from API (empty response)", None
+
+            llm_response = process_llm_response(full_response)
+
+            # Log finish_reason for debugging truncation issues
+            if finish_reason and finish_reason != "stop":
+                logger.warning(f"Response finish_reason: {finish_reason} (may indicate truncation)")
+
+            # Return reasoning budget (for special reasoning modes, return markers)
+            if thinking_mode and is_openai_model:
+                return (
+                    llm_response,
+                    None,
+                    -1,
+                )  # Special marker for effort-based reasoning
+            elif thinking_mode and is_gemini3_model:
+                # For streaming, we can't easily get reasoning token count
+                # Return -2 to indicate reasoning was enabled
+                return (
+                    llm_response,
+                    None,
+                    -2,  # Streaming doesn't provide detailed token counts
+                )
+            else:
+                return (
+                    llm_response,
+                    None,
+                    reasoning_budget_actual if thinking_mode else None,
                 )
 
-                if response.status_code != 200:
-                    return (
-                        "",
-                        f"API error: {response.status_code} - {response.text}",
-                        None,
-                    )
-
-                result = response.json()
-
-                if "choices" not in result or not result["choices"]:
-                    return "", f"Unexpected API response format: {result}", None
-
-                llm_response = process_llm_response(result["choices"][0]["message"]["content"])
-
-                # Return reasoning budget (for special reasoning modes, return markers)
-                if thinking_mode and is_openai_model:
-                    return (
-                        llm_response,
-                        None,
-                        -1,
-                    )  # Special marker for effort-based reasoning
-                elif thinking_mode and is_gemini3_model:
-                    # For Gemini 3 Pro, extract actual reasoning tokens from usage
-                    usage = result.get("usage", {})
-                    completion_details = usage.get("completion_tokens_details", {})
-                    reasoning_tokens = completion_details.get("reasoning_tokens", 0)
-                    return (
-                        llm_response,
-                        None,
-                        -2 if reasoning_tokens > 0 else -3,  # -2 for enabled with reasoning, -3 for enabled without
-                    )
-                else:
-                    return (
-                        llm_response,
-                        None,
-                        reasoning_budget_actual if thinking_mode else None,
-                    )
-
         except httpx.TimeoutException:
+            timeout_mins = OPENROUTER_TIMEOUT / 60
             return (
                 "",
-                f"Request timed out after {OPENROUTER_TIMEOUT} seconds (10 minutes)",
+                f"Request timed out after {OPENROUTER_TIMEOUT:.0f} seconds ({timeout_mins:.0f} minutes). "
+                f"Model may be overloaded or experiencing issues.",
                 None,
             )
         except Exception as e:

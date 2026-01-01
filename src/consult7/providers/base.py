@@ -47,6 +47,7 @@ class BaseProvider(ABC):
         api_key: str,
         thinking_mode: bool = False,
         thinking_budget: Optional[int] = None,
+        zdr: bool = False,
     ) -> Tuple[str, Optional[str], Optional[int]]:
         """Call the LLM and return the response.
 
@@ -57,6 +58,7 @@ class BaseProvider(ABC):
             api_key: API key for the provider
             thinking_mode: Whether thinking/reasoning mode is enabled
             thinking_budget: Number of thinking tokens to use (if applicable)
+            zdr: Whether to enforce Zero Data Retention routing
 
         Returns:
             Tuple of (response, error_message, actual_thinking_budget_used)

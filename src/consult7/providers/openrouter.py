@@ -16,11 +16,11 @@ from ..constants import (
     DEFAULT_TEMPERATURE,
     OPENROUTER_TIMEOUT,
     API_FETCH_TIMEOUT,
-    OPENAI_REASONING_OUTPUT_TOKENS,
 )
 from ..token_utils import (
     TOKEN_SAFETY_FACTOR,
     estimate_tokens,
+    calculate_reasoning_max_tokens,
 )
 
 logger = logging.getLogger("consult7")
@@ -108,40 +108,32 @@ class OpenRouterProvider(BaseProvider):
         total_input = system_msg + user_msg
         estimated_tokens = estimate_tokens(total_input)
 
-        # Fixed output token limit for initial calculation
+        # Base output token limit
         base_max_output_tokens = (
             DEFAULT_OUTPUT_TOKENS if context_length > SMALL_MODEL_THRESHOLD else SMALL_OUTPUT_TOKENS
         )
-        max_output_tokens = base_max_output_tokens
 
-        # Binary approach for reasoning mode - reserve full amount upfront
-        reasoning_budget_actual = 0
+        # Track reasoning type for API call formatting
         is_openai_model = thinking_budget == "effort"
         is_gemini3_model = thinking_budget == "enabled"
 
-        if thinking_mode:
-            if thinking_budget == "effort":
-                # OpenAI models: reasoning tokens count against max_tokens
-                # Must increase max_output_tokens significantly for reasoning + response
-                max_output_tokens = OPENAI_REASONING_OUTPUT_TOKENS
-                reasoning_budget_actual = 0  # Signal that we're using effort mode
-            elif thinking_budget == "enabled":
-                # Gemini 3 Pro uses enabled=true, reasoning is dynamic
-                # No need to adjust max_output_tokens
-                reasoning_budget_actual = 0  # Signal that we're using enabled mode
-            else:
-                # Non-OpenAI models: use the provided reasoning budget
-                reasoning_budget_actual = thinking_budget
+        # Calculate max_tokens using model-aware reasoning budget calculation
+        # This handles different models' reasoning token behavior:
+        # - OpenAI/Claude/Grok: reasoning consumes max_tokens budget
+        # - Gemini 2.5: reasoning is separate from output
+        # - Gemini 3: dynamic reasoning allocation
+        mode_for_calc = "think" if thinking_mode else "fast"
+        max_output_tokens = calculate_reasoning_max_tokens(
+            model_name, mode_for_calc, thinking_budget, base_max_output_tokens
+        )
 
-                # For Anthropic models, reasoning tokens come FROM max_tokens, not in addition
-                # For other models (Gemini), they're additional
-                if "anthropic" in model_name.lower():
-                    # Anthropic: ensure max_tokens > reasoning_budget
-                    # We need at least reasoning_budget + some tokens for the actual response
-                    max_output_tokens = reasoning_budget_actual + 2000  # 2k for actual response
-                else:
-                    # Gemini and others: reasoning is additional to output
-                    max_output_tokens = DEFAULT_OUTPUT_TOKENS + reasoning_budget_actual
+        # Track actual reasoning budget for reporting (0 for effort/enabled modes)
+        if thinking_budget in ("effort", "enabled"):
+            reasoning_budget_actual = 0
+        elif isinstance(thinking_budget, int):
+            reasoning_budget_actual = thinking_budget
+        else:
+            reasoning_budget_actual = 0
 
         # Calculate available input space with reasoning reserved upfront
         available_for_input = int((context_length - max_output_tokens) * TOKEN_SAFETY_FACTOR)

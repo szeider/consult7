@@ -28,7 +28,7 @@ DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
 LLM_CALL_TIMEOUT = 1000.0  # ~17 minutes - very generous timeout for LLM calls
 
 # Application constants
-SERVER_VERSION = "3.3.0"
+SERVER_VERSION = "3.3.1"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 MIN_ARGS = 1
@@ -37,6 +37,7 @@ MIN_ARGS = 1
 DEFAULT_OUTPUT_TOKENS = 8_000  # Default max output tokens (~300 lines of code)
 SMALL_OUTPUT_TOKENS = 4_000  # Output tokens for smaller models
 SMALL_MODEL_THRESHOLD = 100_000  # Context size threshold for small models
+OPENAI_REASONING_OUTPUT_TOKENS = 64_000  # GPT-5.2 reasoning counts against max_tokens
 
 # Test model for OpenRouter
 TEST_MODELS = {

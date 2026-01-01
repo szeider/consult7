@@ -16,6 +16,7 @@ from ..constants import (
     DEFAULT_TEMPERATURE,
     OPENROUTER_TIMEOUT,
     API_FETCH_TIMEOUT,
+    OPENAI_REASONING_OUTPUT_TOKENS,
 )
 from ..token_utils import (
     TOKEN_SAFETY_FACTOR,
@@ -120,9 +121,9 @@ class OpenRouterProvider(BaseProvider):
 
         if thinking_mode:
             if thinking_budget == "effort":
-                # OpenAI models use effort levels, not token counts
-                # For OpenAI models, reasoning uses part of the output budget
-                # We don't increase max_output_tokens
+                # OpenAI models: reasoning tokens count against max_tokens
+                # Must increase max_output_tokens significantly for reasoning + response
+                max_output_tokens = OPENAI_REASONING_OUTPUT_TOKENS
                 reasoning_budget_actual = 0  # Signal that we're using effort mode
             elif thinking_budget == "enabled":
                 # Gemini 3 Pro uses enabled=true, reasoning is dynamic

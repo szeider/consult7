@@ -8,8 +8,12 @@ TOKEN_SAFETY_FACTOR = 0.9  # Safety buffer for token calculations
 
 # Thinking/reasoning constants
 MAX_REASONING_TOKENS = 31_999  # OpenRouter maximum reasoning cap (actual limit for Anthropic)
-FLASH_MAX_THINKING_TOKENS = 24_576  # Google Flash model thinking limit
-PRO_MAX_THINKING_TOKENS = 32_768  # Google Pro model thinking limit
+
+# Dynamic reasoning allocation ratio (for Gemini 3 "enabled" mode)
+DYNAMIC_REASONING_RATIO = 0.50  # Use 50% of model max for dynamic reasoning
+
+# File size limits
+MAX_PER_FILE_BYTES = 10_000_000  # 10MB per file limit
 
 # Token estimation constants
 CHARS_PER_TOKEN_REGULAR = 3.2  # Characters per token for regular text/code
@@ -27,9 +31,9 @@ REASONING_DYNAMIC = "dynamic"
 # OpenRouter effort level ratios (documented at openrouter.ai/docs/use-cases/reasoning-tokens)
 # These represent approximate fraction of max_tokens used for reasoning
 EFFORT_RATIOS = {
-    "high": 0.80,   # ~80% of max_tokens for reasoning
-    "medium": 0.50, # ~50% of max_tokens for reasoning
-    "low": 0.20,    # ~20% of max_tokens for reasoning
+    "high": 0.80,  # ~80% of max_tokens for reasoning
+    "medium": 0.50,  # ~50% of max_tokens for reasoning
+    "low": 0.20,  # ~20% of max_tokens for reasoning
 }
 
 # Minimum recommended tokens for reasoning models (OpenAI guidance)
@@ -108,12 +112,13 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
     thinking_budget_value = get_thinking_budget(model_name, mode)
 
     # Handle different thinking budget types
-    if thinking_budget_value == "effort":
-        # OpenAI effort-based: reserve ~40% of output budget for reasoning
-        thinking_budget = int(output_reserve * 0.4)
-    elif thinking_budget_value == "enabled":
-        # Gemini 3 Pro: reasoning is dynamic, reserve conservative amount
-        thinking_budget = int(output_reserve * 0.3)
+    if thinking_budget_value in ("effort_high", "effort_medium"):
+        # OpenAI effort-based: use appropriate effort ratio
+        effort_key = "high" if thinking_budget_value == "effort_high" else "medium"
+        thinking_budget = int(output_reserve * EFFORT_RATIOS[effort_key])
+    elif thinking_budget_value in ("enabled_high", "enabled_low"):
+        # Gemini 3 Pro: reasoning is dynamic, use dynamic ratio
+        thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value is not None:
         thinking_budget = thinking_budget_value
     else:
@@ -129,8 +134,8 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
     # Convert tokens to bytes (approximately 4 bytes per token for code)
     max_total_bytes = available_tokens * 4
 
-    # Per-file limit: generous - 50% of total or 10MB, whichever is smaller
-    max_per_file = min(max_total_bytes // 2, 10_000_000)
+    # Per-file limit: generous - 50% of total or max per file, whichever is smaller
+    max_per_file = min(max_total_bytes // 2, MAX_PER_FILE_BYTES)
 
     return max_total_bytes, max_per_file
 
@@ -180,11 +185,13 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
 
     # OpenAI models use effort-based reasoning
     if limit == "effort":
-        return "effort"
+        # Return different markers for mid vs think
+        return "effort_medium" if mode == "mid" else "effort_high"
 
-    # Gemini 3 Pro uses enabled=true reasoning
+    # Gemini 3 Pro uses thinkingLevel (low/high) via reasoning.effort
     if limit == "enabled":
-        return "enabled"
+        # Return different markers for mid vs think
+        return "enabled_low" if mode == "mid" else "enabled_high"
 
     # Mid mode: moderate reasoning (50% of max)
     if mode == "mid":
@@ -228,12 +235,13 @@ def calculate_reasoning_max_tokens(
     behavior = MODEL_REASONING_BEHAVIOR.get(model_name, REASONING_FROM_OUTPUT)
     model_max = MODEL_MAX_OUTPUT.get(model_name, DEFAULT_MAX_OUTPUT)
 
-    if thinking_budget == "effort":
+    if thinking_budget in ("effort_high", "effort_medium"):
         # OpenAI effort-based: reasoning tokens consume max_tokens budget
         # Formula from OpenRouter docs: max_tokens >= desired_output / (1 - effort_ratio)
-        # For high effort (80% reasoning): max_tokens >= 5 × desired_output
-        # We use "high" effort, so apply the 80% ratio
-        effort_ratio = EFFORT_RATIOS.get("high", 0.80)
+        # high (80% reasoning): max_tokens >= 5 × desired_output
+        # medium (50% reasoning): max_tokens >= 2 × desired_output
+        effort_key = "high" if thinking_budget == "effort_high" else "medium"
+        effort_ratio = EFFORT_RATIOS.get(effort_key, 0.50)
 
         # Calculate: desired_output / (1 - effort_ratio)
         # This ensures enough room for both reasoning AND the actual response
@@ -243,10 +251,10 @@ def calculate_reasoning_max_tokens(
         # Cap at model max to avoid API errors
         return min(max(calculated, MIN_REASONING_BUDGET), model_max)
 
-    elif thinking_budget == "enabled":
+    elif thinking_budget in ("enabled_high", "enabled_low"):
         # Gemini 3 dynamic: model allocates reasoning internally
-        # Use moderate allocation - model handles the split
-        return int(model_max * 0.5)
+        # Use dynamic ratio - model handles the split
+        return int(model_max * DYNAMIC_REASONING_RATIO)
 
     elif isinstance(thinking_budget, int):
         # Explicit token budget
@@ -256,7 +264,7 @@ def calculate_reasoning_max_tokens(
         elif behavior == REASONING_ADDITIONAL:
             # Reasoning is separate: just need response space
             # (reasoning budget passed separately in API)
-            return base_output_tokens + thinking_budget
+            return base_output_tokens
         else:
             # Dynamic or unknown: conservative allocation
             return thinking_budget + base_output_tokens

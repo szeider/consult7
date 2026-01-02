@@ -111,27 +111,27 @@ async def consultation_impl(
     # Add reasoning budget info if applicable (even for errors)
     if thinking_budget is not None:
         if thinking_budget == -1:
-            # Special marker for OpenAI effort-based reasoning
-            token_info += ", reasoning mode: effort=high (~80% of output budget)"
+            # OpenAI effort=high
+            token_info += ", reasoning: effort=high"
         elif thinking_budget == -2:
-            # Special marker for Gemini 3 Pro with reasoning enabled
-            token_info += ", reasoning mode: enabled=true (dynamic reasoning)"
+            # OpenAI effort=medium
+            token_info += ", reasoning: effort=medium"
         elif thinking_budget == -3:
-            # Special marker for Gemini 3 Pro without reasoning
-            token_info += ", reasoning mode: enabled=true (no reasoning used)"
+            # Gemini 3 effort=high (thinkingLevel=high)
+            token_info += ", reasoning: effort=high"
+        elif thinking_budget == -4:
+            # Gemini 3 effort=low (thinkingLevel=low)
+            token_info += ", reasoning: effort=low"
         elif thinking_budget > 0:
             # Calculate percentage of maximum possible reasoning tokens
-            # Import these only when needed to avoid circular imports
-            from .token_utils import (
-                FLASH_MAX_THINKING_TOKENS,
-                MAX_REASONING_TOKENS,
-            )
+            from .token_utils import THINKING_LIMITS, MAX_REASONING_TOKENS
 
-            # Determine max reasoning based on model
-            if "gemini" in model.lower() and "flash" in model.lower():
-                max_reasoning = FLASH_MAX_THINKING_TOKENS  # 24,576
+            # Determine max reasoning based on model's limit in THINKING_LIMITS
+            model_limit = THINKING_LIMITS.get(model)
+            if isinstance(model_limit, int):
+                max_reasoning = model_limit
             else:
-                max_reasoning = MAX_REASONING_TOKENS  # 32,000 (Anthropic, others)
+                max_reasoning = MAX_REASONING_TOKENS  # Default fallback
 
             percentage = (thinking_budget / max_reasoning) * 100
             token_info += (

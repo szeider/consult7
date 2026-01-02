@@ -92,5 +92,6 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
             "Performance Modes (use 'mode' parameter):\n"
             "- fast: No reasoning, fastest\n"
             "- mid: Moderate reasoning\n"
-            "- think: Maximum reasoning for deepest analysis"
+            "- think: Maximum reasoning for deepest analysis\n\n"
+            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT-5.2)"
         )

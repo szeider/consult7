@@ -114,8 +114,8 @@ class OpenRouterProvider(BaseProvider):
         )
 
         # Track reasoning type for API call formatting
-        is_openai_model = thinking_budget == "effort"
-        is_gemini3_model = thinking_budget == "enabled"
+        uses_effort_reasoning = thinking_budget in ("effort_high", "effort_medium")
+        uses_enabled_reasoning = thinking_budget in ("enabled_high", "enabled_low")
 
         # Calculate max_tokens using model-aware reasoning budget calculation
         # This handles different models' reasoning token behavior:
@@ -128,7 +128,7 @@ class OpenRouterProvider(BaseProvider):
         )
 
         # Track actual reasoning budget for reporting (0 for effort/enabled modes)
-        if thinking_budget in ("effort", "enabled"):
+        if thinking_budget in ("effort_high", "effort_medium", "enabled_high", "enabled_low"):
             reasoning_budget_actual = 0
         elif isinstance(thinking_budget, int):
             reasoning_budget_actual = thinking_budget
@@ -208,14 +208,14 @@ class OpenRouterProvider(BaseProvider):
 
         # Add reasoning mode if thinking_mode is enabled
         if thinking_mode:
-            if is_openai_model:
-                # OpenAI models: use effort level
-                data["reasoning"] = {"effort": "high"}
-                # Note: This uses ~80% of the 8k output budget for reasoning
-                # Total context reduction is still just 8k (not additional)
-            elif is_gemini3_model:
-                # Gemini 3 Pro: use enabled=true
-                data["reasoning"] = {"enabled": True}
+            if uses_effort_reasoning:
+                # OpenAI models: use effort level based on mode
+                effort_level = "high" if thinking_budget == "effort_high" else "medium"
+                data["reasoning"] = {"effort": effort_level}
+            elif uses_enabled_reasoning:
+                # Gemini 3 Pro: use effort level (maps to thinkingLevel via OpenAI compat)
+                effort_level = "high" if thinking_budget == "enabled_high" else "low"
+                data["reasoning"] = {"effort": effort_level}
             else:
                 # Anthropic, Gemini 2.5, and others: use max_tokens
                 data["reasoning"] = {"max_tokens": reasoning_budget_actual}
@@ -262,9 +262,9 @@ class OpenRouterProvider(BaseProvider):
                                 if "choices" in chunk and chunk["choices"]:
                                     choice = chunk["choices"][0]
                                     delta = choice.get("delta", {})
-                                    content = delta.get("content", "")
-                                    if content:
-                                        collected_content.append(content)
+                                    chunk_content = delta.get("content", "")
+                                    if chunk_content:
+                                        collected_content.append(chunk_content)
 
                                     # Track finish_reason
                                     if choice.get("finish_reason"):
@@ -287,20 +287,14 @@ class OpenRouterProvider(BaseProvider):
                 logger.warning(f"Response finish_reason: {finish_reason} (may indicate truncation)")
 
             # Return reasoning budget (for special reasoning modes, return markers)
-            if thinking_mode and is_openai_model:
-                return (
-                    llm_response,
-                    None,
-                    -1,
-                )  # Special marker for effort-based reasoning
-            elif thinking_mode and is_gemini3_model:
-                # For streaming, we can't easily get reasoning token count
-                # Return -2 to indicate reasoning was enabled
-                return (
-                    llm_response,
-                    None,
-                    -2,  # Streaming doesn't provide detailed token counts
-                )
+            # -1: OpenAI effort=high, -2: OpenAI effort=medium
+            # -3: Gemini 3 effort=high, -4: Gemini 3 effort=low
+            if thinking_mode and uses_effort_reasoning:
+                marker = -1 if thinking_budget == "effort_high" else -2
+                return (llm_response, None, marker)
+            elif thinking_mode and uses_enabled_reasoning:
+                marker = -3 if thinking_budget == "enabled_high" else -4
+                return (llm_response, None, marker)
             else:
                 return (
                     llm_response,

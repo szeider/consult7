@@ -90,7 +90,7 @@ def format_content(
     files: List[Path],
     errors: List[str],
     max_total_size: int = MAX_TOTAL_SIZE,
-    max_file_size: int = MAX_FILE_SIZE
+    max_file_size: int = MAX_FILE_SIZE,
 ) -> Tuple[str, int]:
     """Format files into text content.
 
@@ -109,7 +109,9 @@ def format_content(
     sorted_files = sorted(files)
 
     # Add capacity information
-    content_parts.append(f"File Size Budget: {max_total_size:,} bytes (~{max_total_size // 4:,} tokens)")
+    content_parts.append(
+        f"File Size Budget: {max_total_size:,} bytes (~{max_total_size // 4:,} tokens)"
+    )
     content_parts.append(f"Files Found: {len(files)}")
     content_parts.append("")
 

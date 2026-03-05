@@ -49,7 +49,7 @@ Consult7 supports **Google's Gemini 3.1** family:
 **Quick mnemonics for power users:**
 - **`gemt`** = Gemini 3.1 Pro + think (flagship reasoning)
 - **`gemf`** = Gemini 3 Flash + fast (ultra fast)
-- **`gptt`** = GPT-5.2 + think (latest GPT)
+- **`gptt`** = GPT-5.4 + think (latest GPT)
 - **`grot`** = Grok 4 + think (alternative reasoning)
 - **`oput`** = Claude Opus 4.6 + think (deep reasoning)
 - **`ULTRA`** = Run GEMT, GPTT, GROT, and OPUT in parallel (4 frontier models)
@@ -103,7 +103,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 
 | Model | Context | Use Case |
 |-------|---------|----------|
-| `openai/gpt-5.2` | 400k | Latest GPT, balanced performance |
+| `openai/gpt-5.4` | 1M | Latest GPT, balanced performance |
 | `google/gemini-3.1-pro-preview` | 1M | **Flagship reasoning model** |
 | `google/gemini-3-flash-preview` | 1M | **Gemini 3 Flash, ultra fast** |
 | `google/gemini-3.1-flash-lite-preview` | 1M | Ultra-fast lite model |
@@ -114,7 +114,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | `x-ai/grok-4.1-fast` | 2M | Largest context window |
 
 **Quick mnemonics:**
-- `gptt` = `openai/gpt-5.2` + `think` (latest GPT, deep reasoning)
+- `gptt` = `openai/gpt-5.4` + `think` (latest GPT, deep reasoning)
 - `gemt` = `google/gemini-3.1-pro-preview` + `think` (Gemini 3.1 Pro, flagship reasoning)
 - `grot` = `x-ai/grok-4` + `think` (Grok 4, deep reasoning)
 - `oput` = `anthropic/claude-opus-4.6` + `think` (Claude Opus, deep reasoning)
@@ -144,7 +144,7 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 **Automatically ignored:** `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`
 
-**Size limits:** Dynamic based on model context window (e.g., Grok 4 Fast: ~8MB, GPT-5.2: ~1.5MB)
+**Size limits:** Dynamic based on model context window (e.g., Grok 4 Fast: ~8MB, GPT-5.4: ~1.5MB)
 
 ## Tool Parameters
 
@@ -161,7 +161,7 @@ The consultation tool accepts the following parameters:
 - **zdr** (optional): Enable Zero Data Retention routing (default: `false`)
   - When `true`, routes only to endpoints with ZDR policy (prompts not retained by provider)
   - ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.6, GPT-5
-  - Not available: GPT-5.2, Grok 4 (returns error)
+  - Not available: GPT-5.4, Grok 4 (returns error)
 
 ## Usage Examples
 

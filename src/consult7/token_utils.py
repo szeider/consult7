@@ -42,7 +42,8 @@ MIN_REASONING_BUDGET = 25_000
 # Thinking/Reasoning Token Limits by Model - Officially Supported Models Only
 THINKING_LIMITS = {
     # OpenAI models - use effort-based reasoning (not token counts)
-    "openai/gpt-5.2": "effort",
+    "openai/gpt-5.4": "effort",
+    "openai/gpt-5.2": "effort",  # legacy
     # Google Gemini 3.1 models - use reasoning.enabled=true
     "google/gemini-3.1-pro-preview": "enabled",
     "google/gemini-3.1-flash-lite-preview": "enabled",
@@ -68,7 +69,8 @@ THINKING_LIMITS = {
 # How each model handles reasoning token allocation
 MODEL_REASONING_BEHAVIOR = {
     # OpenAI: reasoning consumes max_tokens, effort-based (can use 50k+ tokens)
-    "openai/gpt-5.2": REASONING_FROM_OUTPUT,
+    "openai/gpt-5.4": REASONING_FROM_OUTPUT,
+    "openai/gpt-5.2": REASONING_FROM_OUTPUT,  # legacy
     # Anthropic: reasoning consumes max_tokens
     "anthropic/claude-opus-4.6": REASONING_FROM_OUTPUT,
     "anthropic/claude-sonnet-4.6": REASONING_FROM_OUTPUT,
@@ -91,7 +93,8 @@ MODEL_REASONING_BEHAVIOR = {
 
 # Max output tokens by model (from OpenRouter API)
 MODEL_MAX_OUTPUT = {
-    "openai/gpt-5.2": 128_000,
+    "openai/gpt-5.4": 128_000,
+    "openai/gpt-5.2": 128_000,  # legacy
     "anthropic/claude-opus-4.6": 32_000,
     "anthropic/claude-sonnet-4.6": 64_000,
     "anthropic/claude-haiku-4.5": 16_000,

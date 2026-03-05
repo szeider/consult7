@@ -6,7 +6,7 @@ class ToolDescriptions:
 
     MODEL_EXAMPLES = {
         "openrouter": [
-            '"openai/gpt-5.2" (GPT-5.2, 400k context)',
+            '"openai/gpt-5.4" (GPT-5.4, 1M context)',
             '"google/gemini-3.1-pro-preview" (Gemini 3.1 Pro, 1M context, flagship reasoning)',
             '"google/gemini-3-flash-preview" (Gemini 3 Flash, 1M context, fast)',
             '"google/gemini-3.1-flash-lite-preview" (Gemini 3.1 Flash Lite, 1M context, ultra fast)',
@@ -32,7 +32,7 @@ TIPS:
 - Long instructions: Put them in a file, include in files list, keep query short
 
 Quick mnemonics:
-- gptt = openai/gpt-5.2 + think (latest GPT, deep reasoning)
+- gptt = openai/gpt-5.4 + think (latest GPT, deep reasoning)
 - gemt = google/gemini-3.1-pro-preview + think (Gemini 3.1 Pro, flagship reasoning)
 - grot = x-ai/grok-4 + think (Grok 4, deep reasoning)
 - oput = anthropic/claude-opus-4.6 + think (Claude Opus, deep reasoning)
@@ -83,7 +83,7 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
             "Optional: Enable Zero Data Retention. When true, routes only to endpoints "
             "with ZDR policy (prompts not retained by provider). Default: false. "
             "ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.6, GPT-5. "
-            "Not available: GPT-5.2, Grok 4"
+            "Not available: GPT-5.4, Grok 4"
         )
 
     @classmethod
@@ -94,5 +94,5 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
             "- fast: No reasoning, fastest\n"
             "- mid: Moderate reasoning\n"
             "- think: Maximum reasoning for deepest analysis\n\n"
-            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT-5.2)"
+            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT-5.4)"
         )

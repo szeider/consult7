@@ -4,6 +4,27 @@ Archived content from CLAUDE.md to keep the main file manageable.
 
 ---
 
+## Archived Version History (2026-03-05)
+
+### v3.2.0 (December 12, 2025)
+- Updated GPT model from `openai/gpt-5.1` to `openai/gpt-5.2`
+- GPT-5.2 adds new `xhigh` reasoning effort level (we use `high` for consistency)
+- Tested and confirmed working via OpenRouter (400K context, effort-based reasoning)
+
+### v3.1.2 (November 25, 2025)
+- Updated Claude Opus to `anthropic/claude-opus-4.5`
+- Added mnemonics: `oput` (Opus + think), `opuf` (Opus + fast)
+- ULTRA now includes 4 frontier models (added OPUT)
+
+### v3.1.1 (November 19, 2025)
+- Documentation improvements: Enhanced README for better PyPI presentation
+- No code changes - documentation only
+
+### v3.1.0 (November 19, 2025)
+- Added `google/gemini-3-pro-preview` (1M context, flagship reasoning model)
+- New mnemonics: `gemt` (Gemini 3 Pro), `grot` (Grok 4), `oput`/`opuf` (Claude Opus), `ULTRA` (parallel execution)
+- Implements `{"reasoning": {"enabled": true}}` API format for Gemini 3 Pro
+
 ## Archived Version History (2026-01-02)
 
 ### v3.0.0 (November 2025)

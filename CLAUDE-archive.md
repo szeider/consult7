@@ -4,7 +4,11 @@ Archived content from CLAUDE.md to keep the main file manageable.
 
 ---
 
-## Archived Version History (2026-01-01)
+## Archived Version History (2026-01-02)
+
+### v3.0.0 (November 2025)
+- **BREAKING CHANGE**: Removed Google and OpenAI direct providers (OpenRouter only)
+- Added GPT-5 support, simplified CLI to `consult7 <api-key>`
 
 ### v2.1.0 (September 2025)
 - **NEW FEATURE**: Optional `output_file` parameter to save responses to files

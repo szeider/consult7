@@ -28,7 +28,7 @@
 ### Deep analysis with reasoning
 * **Files:** `["/Users/john/webapp/src/*.py", "/Users/john/webapp/auth/*.py", "/Users/john/webapp/api/*.js"]`
 * **Query:** "Analyze the authentication flow across this codebase. Think step by step about security vulnerabilities and suggest improvements"
-* **Model:** `"anthropic/claude-sonnet-4.5"`
+* **Model:** `"anthropic/claude-sonnet-4.6"`
 * **Mode:** `"think"`
 
 ### Generate a report saved to file
@@ -39,17 +39,19 @@
 * **Output File:** `"/Users/john/reports/code_review.md"`
 * **Result:** Returns `"Result has been saved to /Users/john/reports/code_review.md"` instead of flooding the agent's context
 
-## Featured: Gemini 3 Models
+## Featured: Gemini 3.1 Models
 
-Consult7 supports **Google's Gemini 3** family:
-- **Gemini 3 Pro** (`google/gemini-3-pro-preview`) - Flagship reasoning model, 1M context
+Consult7 supports **Google's Gemini 3.1** family:
+- **Gemini 3.1 Pro** (`google/gemini-3.1-pro-preview`) - Flagship reasoning model, 1M context
 - **Gemini 3 Flash** (`google/gemini-3-flash-preview`) - Ultra-fast model, 1M context
+- **Gemini 3.1 Flash Lite** (`google/gemini-3.1-flash-lite-preview`) - Ultra-fast lite model, 1M context
 
 **Quick mnemonics for power users:**
-- **`gemt`** = Gemini 3 Pro + think (flagship reasoning)
+- **`gemt`** = Gemini 3.1 Pro + think (flagship reasoning)
 - **`gemf`** = Gemini 3 Flash + fast (ultra fast)
 - **`gptt`** = GPT-5.2 + think (latest GPT)
 - **`grot`** = Grok 4 + think (alternative reasoning)
+- **`oput`** = Claude Opus 4.6 + think (deep reasoning)
 - **`ULTRA`** = Run GEMT, GPTT, GROT, and OPUT in parallel (4 frontier models)
 
 These mnemonics make it easy to reference model+mode combinations in your queries.
@@ -102,21 +104,21 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | Model | Context | Use Case |
 |-------|---------|----------|
 | `openai/gpt-5.2` | 400k | Latest GPT, balanced performance |
-| `google/gemini-3-pro-preview` | 1M | **Flagship reasoning model** |
-| `google/gemini-2.5-pro` | 1M | Best for complex analysis |
+| `google/gemini-3.1-pro-preview` | 1M | **Flagship reasoning model** |
 | `google/gemini-3-flash-preview` | 1M | **Gemini 3 Flash, ultra fast** |
-| `google/gemini-2.5-flash` | 1M | Fast, good for most tasks |
-| `anthropic/claude-sonnet-4.5` | 1M | Excellent reasoning |
-| `anthropic/claude-opus-4.5` | 200k | Best quality, slower |
+| `google/gemini-3.1-flash-lite-preview` | 1M | Ultra-fast lite model |
+| `anthropic/claude-opus-4.6` | 200k | Best quality, deep reasoning |
+| `anthropic/claude-sonnet-4.6` | 200k | Excellent reasoning, fast |
+| `anthropic/claude-haiku-4.5` | 200k | Budget, very fast |
 | `x-ai/grok-4` | 256k | Alternative reasoning model |
-| `x-ai/grok-4-fast` | 2M | Largest context window |
+| `x-ai/grok-4.1-fast` | 2M | Largest context window |
 
 **Quick mnemonics:**
 - `gptt` = `openai/gpt-5.2` + `think` (latest GPT, deep reasoning)
-- `gemt` = `google/gemini-3-pro-preview` + `think` (Gemini 3 Pro, flagship reasoning)
+- `gemt` = `google/gemini-3.1-pro-preview` + `think` (Gemini 3.1 Pro, flagship reasoning)
 - `grot` = `x-ai/grok-4` + `think` (Grok 4, deep reasoning)
-- `oput` = `anthropic/claude-opus-4.5` + `think` (Claude Opus, deep reasoning)
-- `opuf` = `anthropic/claude-opus-4.5` + `fast` (Claude Opus, no reasoning)
+- `oput` = `anthropic/claude-opus-4.6` + `think` (Claude Opus, deep reasoning)
+- `opuf` = `anthropic/claude-opus-4.6` + `fast` (Claude Opus, no reasoning)
 - `gemf` = `google/gemini-3-flash-preview` + `fast` (Gemini 3 Flash, ultra fast)
 - `ULTRA` = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight)
 
@@ -158,7 +160,7 @@ The consultation tool accepts the following parameters:
   - Useful for generating reports, documentation, or analyses without flooding the agent's context
 - **zdr** (optional): Enable Zero Data Retention routing (default: `false`)
   - When `true`, routes only to endpoints with ZDR policy (prompts not retained by provider)
-  - ZDR available: Gemini 3 Pro/Flash, Claude Opus 4.5, GPT-5
+  - ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.6, GPT-5
   - Not available: GPT-5.2, Grok 4 (returns error)
 
 ## Usage Examples
@@ -207,6 +209,12 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.4.0
+- Upgraded models: Gemini 3.1 Pro, Claude Opus 4.6, Claude Sonnet 4.6, Grok 4.1 Fast
+- Added new models: Claude Haiku 4.5, Gemini 3.1 Flash Lite
+- Updated mnemonics: `gemt` → Gemini 3.1 Pro, `oput`/`opuf` → Claude Opus 4.6
+- Legacy model IDs still supported
 
 ### v3.3.0
 - Fixed GPT-5.2 thinking mode truncation issue (switched to streaming)

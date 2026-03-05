@@ -43,18 +43,26 @@ MIN_REASONING_BUDGET = 25_000
 THINKING_LIMITS = {
     # OpenAI models - use effort-based reasoning (not token counts)
     "openai/gpt-5.2": "effort",
-    # Google Gemini 3 models - use reasoning.enabled=true
+    # Google Gemini 3.1 models - use reasoning.enabled=true
+    "google/gemini-3.1-pro-preview": "enabled",
+    "google/gemini-3.1-flash-lite-preview": "enabled",
+    # Google Gemini 3 models (legacy, still valid)
     "google/gemini-3-pro-preview": "enabled",
     "google/gemini-3-flash-preview": "enabled",
     # Google Gemini 2.5 models
     "google/gemini-2.5-pro": 32_768,
     "google/gemini-2.5-flash": 24_576,
     # Anthropic Claude models
+    "anthropic/claude-opus-4.6": 31_999,
+    "anthropic/claude-sonnet-4.6": 31_999,
+    "anthropic/claude-haiku-4.5": 31_999,
+    # Anthropic Claude models (legacy, still valid)
     "anthropic/claude-sonnet-4.5": 31_999,
     "anthropic/claude-opus-4.5": 31_999,
-    # X-AI Grok models - TBD (need to test)
-    "x-ai/grok-4": 32_000,  # To be confirmed
-    "x-ai/grok-4-fast": 32_000,  # To be confirmed
+    # X-AI Grok models
+    "x-ai/grok-4": 32_000,
+    "x-ai/grok-4.1-fast": 32_000,
+    "x-ai/grok-4-fast": 32_000,  # legacy
 }
 
 # How each model handles reasoning token allocation
@@ -62,30 +70,42 @@ MODEL_REASONING_BEHAVIOR = {
     # OpenAI: reasoning consumes max_tokens, effort-based (can use 50k+ tokens)
     "openai/gpt-5.2": REASONING_FROM_OUTPUT,
     # Anthropic: reasoning consumes max_tokens
-    "anthropic/claude-sonnet-4.5": REASONING_FROM_OUTPUT,
-    "anthropic/claude-opus-4.5": REASONING_FROM_OUTPUT,
+    "anthropic/claude-opus-4.6": REASONING_FROM_OUTPUT,
+    "anthropic/claude-sonnet-4.6": REASONING_FROM_OUTPUT,
+    "anthropic/claude-haiku-4.5": REASONING_FROM_OUTPUT,
+    "anthropic/claude-sonnet-4.5": REASONING_FROM_OUTPUT,  # legacy
+    "anthropic/claude-opus-4.5": REASONING_FROM_OUTPUT,  # legacy
     # Gemini 2.5: reasoning is additional to output
     "google/gemini-2.5-pro": REASONING_ADDITIONAL,
     "google/gemini-2.5-flash": REASONING_ADDITIONAL,
-    # Gemini 3: dynamic reasoning allocation
-    "google/gemini-3-pro-preview": REASONING_DYNAMIC,
-    "google/gemini-3-flash-preview": REASONING_DYNAMIC,
-    # Grok: assume similar to OpenAI (reasoning from output)
+    # Gemini 3.1/3: dynamic reasoning allocation
+    "google/gemini-3.1-pro-preview": REASONING_DYNAMIC,
+    "google/gemini-3.1-flash-lite-preview": REASONING_DYNAMIC,
+    "google/gemini-3-pro-preview": REASONING_DYNAMIC,  # legacy
+    "google/gemini-3-flash-preview": REASONING_DYNAMIC,  # legacy
+    # Grok: reasoning from output
     "x-ai/grok-4": REASONING_FROM_OUTPUT,
-    "x-ai/grok-4-fast": REASONING_FROM_OUTPUT,
+    "x-ai/grok-4.1-fast": REASONING_FROM_OUTPUT,
+    "x-ai/grok-4-fast": REASONING_FROM_OUTPUT,  # legacy
 }
 
 # Max output tokens by model (from OpenRouter API)
 MODEL_MAX_OUTPUT = {
     "openai/gpt-5.2": 128_000,
-    "anthropic/claude-sonnet-4.5": 64_000,
-    "anthropic/claude-opus-4.5": 32_000,
+    "anthropic/claude-opus-4.6": 32_000,
+    "anthropic/claude-sonnet-4.6": 64_000,
+    "anthropic/claude-haiku-4.5": 16_000,
+    "anthropic/claude-sonnet-4.5": 64_000,  # legacy
+    "anthropic/claude-opus-4.5": 32_000,  # legacy
+    "google/gemini-3.1-pro-preview": 65_536,
+    "google/gemini-3.1-flash-lite-preview": 65_536,
+    "google/gemini-3-pro-preview": 65_536,  # legacy
+    "google/gemini-3-flash-preview": 65_536,  # legacy
     "google/gemini-2.5-pro": 65_536,
     "google/gemini-2.5-flash": 65_536,
-    "google/gemini-3-pro-preview": 65_536,
-    "google/gemini-3-flash-preview": 65_536,
     "x-ai/grok-4": 131_072,
-    "x-ai/grok-4-fast": 131_072,
+    "x-ai/grok-4.1-fast": 131_072,
+    "x-ai/grok-4-fast": 131_072,  # legacy
 }
 
 # Default max output when model not in table
@@ -260,7 +280,8 @@ def calculate_reasoning_max_tokens(
         # Explicit token budget
         if behavior == REASONING_FROM_OUTPUT:
             # Reasoning comes from max_tokens: need reasoning + response space
-            return thinking_budget + base_output_tokens
+            # Cap at model max to avoid API errors
+            return min(thinking_budget + base_output_tokens, model_max)
         elif behavior == REASONING_ADDITIONAL:
             # Reasoning is separate: just need response space
             # (reasoning budget passed separately in API)

@@ -7,13 +7,14 @@ class ToolDescriptions:
     MODEL_EXAMPLES = {
         "openrouter": [
             '"openai/gpt-5.2" (GPT-5.2, 400k context)',
-            '"google/gemini-3-pro-preview" (Gemini 3 Pro, 1M context, flagship reasoning)',
+            '"google/gemini-3.1-pro-preview" (Gemini 3.1 Pro, 1M context, flagship reasoning)',
             '"google/gemini-3-flash-preview" (Gemini 3 Flash, 1M context, fast)',
-            '"google/gemini-2.5-flash" (Gemini 2.5 Flash, 1M context)',
-            '"anthropic/claude-sonnet-4.5" (Claude Sonnet 4.5, 1M context)',
-            '"anthropic/claude-opus-4.5" (Claude Opus 4.5, 200k context)',
+            '"google/gemini-3.1-flash-lite-preview" (Gemini 3.1 Flash Lite, 1M context, ultra fast)',
+            '"anthropic/claude-opus-4.6" (Claude Opus 4.6, 200k context)',
+            '"anthropic/claude-sonnet-4.6" (Claude Sonnet 4.6, 200k context)',
+            '"anthropic/claude-haiku-4.5" (Claude Haiku 4.5, 200k context, budget)',
             '"x-ai/grok-4" (Grok 4, 256k context)',
-            '"x-ai/grok-4-fast" (Grok 4 Fast, 2M context)',
+            '"x-ai/grok-4.1-fast" (Grok 4.1 Fast, 2M context)',
         ],
     }
 
@@ -32,10 +33,10 @@ TIPS:
 
 Quick mnemonics:
 - gptt = openai/gpt-5.2 + think (latest GPT, deep reasoning)
-- gemt = google/gemini-3-pro-preview + think (Gemini 3 Pro, flagship reasoning)
+- gemt = google/gemini-3.1-pro-preview + think (Gemini 3.1 Pro, flagship reasoning)
 - grot = x-ai/grok-4 + think (Grok 4, deep reasoning)
-- oput = anthropic/claude-opus-4.5 + think (Claude Opus, deep reasoning)
-- opuf = anthropic/claude-opus-4.5 + fast (Claude Opus, no reasoning)
+- oput = anthropic/claude-opus-4.6 + think (Claude Opus, deep reasoning)
+- opuf = anthropic/claude-opus-4.6 + fast (Claude Opus, no reasoning)
 - gemf = google/gemini-3-flash-preview + fast (Gemini 3 Flash, ultra fast)
 - ULTRA = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight)
 
@@ -50,7 +51,7 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
         """Get the model parameter description with provider-specific examples."""
         examples = cls.MODEL_EXAMPLES.get(provider, [])
 
-        # Show all 8 flagship models
+        # Show all flagship models
         model_desc = "Model name. Options:\n"
         for example in examples:
             model_desc += f"  {example}\n"
@@ -81,7 +82,7 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
         return (
             "Optional: Enable Zero Data Retention. When true, routes only to endpoints "
             "with ZDR policy (prompts not retained by provider). Default: false. "
-            "ZDR available: Gemini 3 Pro/Flash, Claude Opus 4.5, GPT-5. "
+            "ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.6, GPT-5. "
             "Not available: GPT-5.2, Grok 4"
         )
 

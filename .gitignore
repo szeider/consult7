@@ -84,7 +84,6 @@ Thumbs.db
 *.mcp.json
 
 # Project specific
-CLAUDE.md
 local/
 secrets.py
 *.log

@@ -28,7 +28,7 @@
 ### Deep analysis with reasoning
 * **Files:** `["/Users/john/webapp/src/*.py", "/Users/john/webapp/auth/*.py", "/Users/john/webapp/api/*.js"]`
 * **Query:** "Analyze the authentication flow across this codebase. Think step by step about security vulnerabilities and suggest improvements"
-* **Model:** `"anthropic/claude-sonnet-4.6"`
+* **Model:** `"anthropic/claude-opus-4.7"`
 * **Mode:** `"think"`
 
 ### Generate a report saved to file
@@ -49,9 +49,9 @@ Consult7 supports **Google's Gemini 3.1** family:
 **Quick mnemonics for power users:**
 - **`gemt`** = Gemini 3.1 Pro + think (flagship reasoning)
 - **`gemf`** = Gemini 3 Flash + fast (ultra fast)
-- **`gptt`** = GPT-5.4 + think (latest GPT)
-- **`grot`** = Grok 4 + think (alternative reasoning)
-- **`oput`** = Claude Opus 4.6 + think (deep reasoning)
+- **`gptt`** = GPT-5.5 + think (latest GPT)
+- **`grot`** = Grok 4.20 + think (automatic reasoning)
+- **`oput`** = Claude Opus 4.7 + think (adaptive thinking)
 - **`ULTRA`** = Run GEMT, GPTT, GROT, and OPUT in parallel (4 frontier models)
 
 These mnemonics make it easy to reference model+mode combinations in your queries.
@@ -103,22 +103,22 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 
 | Model | Context | Use Case |
 |-------|---------|----------|
-| `openai/gpt-5.4` | 1M | Latest GPT, balanced performance |
+| `openai/gpt-5.5` | 1M | Latest GPT, balanced performance |
 | `google/gemini-3.1-pro-preview` | 1M | **Flagship reasoning model** |
 | `google/gemini-3-flash-preview` | 1M | **Gemini 3 Flash, ultra fast** |
 | `google/gemini-3.1-flash-lite-preview` | 1M | Ultra-fast lite model |
-| `anthropic/claude-opus-4.6` | 200k | Best quality, deep reasoning |
-| `anthropic/claude-sonnet-4.6` | 200k | Excellent reasoning, fast |
+| `anthropic/claude-opus-4.7` | 1M | Best quality, adaptive thinking |
+| `anthropic/claude-sonnet-4.6` | 1M | Excellent reasoning, fast |
 | `anthropic/claude-haiku-4.5` | 200k | Budget, very fast |
-| `x-ai/grok-4` | 256k | Alternative reasoning model |
+| `x-ai/grok-4.20` | 2M | Automatic reasoning, huge context |
 | `x-ai/grok-4.1-fast` | 2M | Largest context window |
 
 **Quick mnemonics:**
-- `gptt` = `openai/gpt-5.4` + `think` (latest GPT, deep reasoning)
+- `gptt` = `openai/gpt-5.5` + `think` (latest GPT, deep reasoning)
 - `gemt` = `google/gemini-3.1-pro-preview` + `think` (Gemini 3.1 Pro, flagship reasoning)
-- `grot` = `x-ai/grok-4` + `think` (Grok 4, deep reasoning)
-- `oput` = `anthropic/claude-opus-4.6` + `think` (Claude Opus, deep reasoning)
-- `opuf` = `anthropic/claude-opus-4.6` + `fast` (Claude Opus, no reasoning)
+- `grot` = `x-ai/grok-4.20` + `think` (Grok 4.20, automatic reasoning)
+- `oput` = `anthropic/claude-opus-4.7` + `think` (Claude Opus, adaptive thinking)
+- `opuf` = `anthropic/claude-opus-4.7` + `fast` (Claude Opus, no reasoning)
 - `gemf` = `google/gemini-3-flash-preview` + `fast` (Gemini 3 Flash, ultra fast)
 - `ULTRA` = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight)
 
@@ -144,7 +144,7 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 **Automatically ignored:** `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`
 
-**Size limits:** Dynamic based on model context window (e.g., Grok 4 Fast: ~8MB, GPT-5.4: ~1.5MB)
+**Size limits:** Dynamic based on model context window (e.g., Grok 4.20: ~8MB, GPT-5.5: ~4MB)
 
 ## Tool Parameters
 
@@ -160,8 +160,8 @@ The consultation tool accepts the following parameters:
   - Useful for generating reports, documentation, or analyses without flooding the agent's context
 - **zdr** (optional): Enable Zero Data Retention routing (default: `false`)
   - When `true`, routes only to endpoints with ZDR policy (prompts not retained by provider)
-  - ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.6, GPT-5
-  - Not available: GPT-5.4, Grok 4 (returns error)
+  - ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.7, GPT-5
+  - Not available: GPT-5.5, Grok 4.20 (returns error)
 
 ## Usage Examples
 
@@ -209,6 +209,16 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.6.0
+- Upgraded models: GPT-5.5, Claude Opus 4.7, Grok 4.20
+- Claude Opus 4.7 (1M context) uses adaptive thinking — `reasoning.enabled=true`
+- Grok 4.20 (2M context) uses automatic reasoning — `reasoning.enabled=true`
+- Updated mnemonics: `gptt` → GPT-5.5, `oput`/`opuf` → Claude Opus 4.7, `grot` → Grok 4.20
+- Legacy model IDs still supported
+
+### v3.5.0
+- Upgraded GPT-5.2 → GPT-5.4 (~1M context)
 
 ### v3.4.0
 - Upgraded models: Gemini 3.1 Pro, Claude Opus 4.6, Claude Sonnet 4.6, Grok 4.1 Fast

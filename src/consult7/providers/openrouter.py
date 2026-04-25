@@ -104,7 +104,10 @@ class OpenRouterProvider(BaseProvider):
 
         # Estimate tokens for the input
         system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
-        user_msg = f"Here are the files to analyze:\n\n{content}\n\nQuery: {query}"
+        if content:
+            user_msg = f"Here are the files to analyze:\n\n{content}\n\nQuery: {query}"
+        else:
+            user_msg = query
         total_input = system_msg + user_msg
         estimated_tokens = estimate_tokens(total_input)
 
@@ -116,6 +119,7 @@ class OpenRouterProvider(BaseProvider):
         # Track reasoning type for API call formatting
         uses_effort_reasoning = thinking_budget in ("effort_high", "effort_medium")
         uses_enabled_reasoning = thinking_budget in ("enabled_high", "enabled_low")
+        uses_toggle_reasoning = thinking_budget == "toggle_on"
 
         # Calculate max_tokens using model-aware reasoning budget calculation
         # This handles different models' reasoning token behavior:
@@ -127,8 +131,14 @@ class OpenRouterProvider(BaseProvider):
             model_name, mode_for_calc, thinking_budget, base_max_output_tokens
         )
 
-        # Track actual reasoning budget for reporting (0 for effort/enabled modes)
-        if thinking_budget in ("effort_high", "effort_medium", "enabled_high", "enabled_low"):
+        # Track actual reasoning budget for reporting (0 for effort/enabled/toggle modes)
+        if thinking_budget in (
+            "effort_high",
+            "effort_medium",
+            "enabled_high",
+            "enabled_low",
+            "toggle_on",
+        ):
             reasoning_budget_actual = 0
         elif isinstance(thinking_budget, int):
             reasoning_budget_actual = thinking_budget
@@ -216,8 +226,12 @@ class OpenRouterProvider(BaseProvider):
                 # Gemini 3 Pro: use effort level (maps to thinkingLevel via OpenAI compat)
                 effort_level = "high" if thinking_budget == "enabled_high" else "low"
                 data["reasoning"] = {"effort": effort_level}
+            elif uses_toggle_reasoning:
+                # Claude Opus 4.7 / Grok 4.20: adaptive/automatic reasoning — enable only
+                # reasoning.effort and reasoning.max_tokens are ignored/unsupported
+                data["reasoning"] = {"enabled": True}
             else:
-                # Anthropic, Gemini 2.5, and others: use max_tokens
+                # Older Anthropic, Gemini 2.5, and others: use max_tokens
                 data["reasoning"] = {"max_tokens": reasoning_budget_actual}
 
         try:
@@ -237,9 +251,29 @@ class OpenRouterProvider(BaseProvider):
                     if response.status_code != 200:
                         # Read error response body
                         error_body = await response.aread()
+                        body_text = error_body.decode()
+
+                        # Friendlier wrapper for ZDR no-endpoint failures
+                        if (
+                            zdr
+                            and response.status_code == 404
+                            and "data policy" in body_text.lower()
+                        ):
+                            return (
+                                "",
+                                (
+                                    f"Zero Data Retention not available for model '{model_name}'. "
+                                    "No OpenRouter endpoint for this model meets the ZDR policy. "
+                                    "Retry with zdr=false, or pick a ZDR-supported model "
+                                    "(e.g. google/gemini-3.1-pro-preview, anthropic/claude-opus-4.7). "
+                                    f"Raw upstream response: {body_text}"
+                                ),
+                                None,
+                            )
+
                         return (
                             "",
-                            f"API error: {response.status_code} - {error_body.decode()}",
+                            f"API error: {response.status_code} - {body_text}",
                             None,
                         )
 
@@ -289,12 +323,15 @@ class OpenRouterProvider(BaseProvider):
             # Return reasoning budget (for special reasoning modes, return markers)
             # -1: OpenAI effort=high, -2: OpenAI effort=medium
             # -3: Gemini 3 effort=high, -4: Gemini 3 effort=low
+            # -5: Opus 4.7 / Grok 4.20 reasoning.enabled=true (adaptive)
             if thinking_mode and uses_effort_reasoning:
                 marker = -1 if thinking_budget == "effort_high" else -2
                 return (llm_response, None, marker)
             elif thinking_mode and uses_enabled_reasoning:
                 marker = -3 if thinking_budget == "enabled_high" else -4
                 return (llm_response, None, marker)
+            elif thinking_mode and uses_toggle_reasoning:
+                return (llm_response, None, -5)
             else:
                 return (
                     llm_response,

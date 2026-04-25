@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consult7"
-version = "3.5.0"
+version = "3.6.1"
 description = "MCP server for consulting large context window models to analyze extensive file collections via OpenRouter"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["mcp", "llm", "code-analysis", "large-context", "openrouter"]
 dependencies = [
-    "mcp>=1.26.0",
+    "mcp>=1.27.0",
     "httpx>=0.28.1",
 ]
 
@@ -38,8 +38,8 @@ include = [
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15.4",
-    "anthropic>=0.84.0",  # For MCP testing support
+    "ruff>=0.15.12",
+    "anthropic>=0.97.0",  # For MCP testing support
 ]
 
 [tool.ruff]

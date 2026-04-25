@@ -54,29 +54,33 @@ async def consultation_impl(
     if not file_paths and errors:
         return "Error: No files found. Errors:\n" + "\n".join(errors)
 
-    # Provide immediate feedback about what was found
-    if not file_paths:
-        return "No files matching the patterns were found."
-
     # Get model info to calculate dynamic limits
     model_info = await get_model_context_info(model, provider, api_key)
     model_context_length = model_info.get("context_length", DEFAULT_CONTEXT_LENGTH)
-
-    # Calculate dynamic file size limits based on model's context window
-    max_total_size, max_file_size = calculate_max_file_size(model_context_length, mode, model)
-
-    # Format content with model-specific limits
-    content, total_size = format_content(file_paths, errors, max_total_size, max_file_size)
 
     # Determine thinking mode based on mode parameter
     thinking_budget_value = get_thinking_budget(model, mode)
     thinking_mode = thinking_budget_value is not None
 
-    # Add size info that will be part of the query
-    size_info = f"\n\n---\nTotal content size: {total_size:,} bytes from {len(file_paths)} files"
+    if file_paths:
+        # Calculate dynamic file size limits based on model's context window
+        max_total_size, max_file_size = calculate_max_file_size(model_context_length, mode, model)
 
-    # Estimate tokens for the full input
-    full_content = content + size_info + f"\n\nQuery: {query}"
+        # Format content with model-specific limits
+        content, total_size = format_content(file_paths, errors, max_total_size, max_file_size)
+
+        # Add size info that will be part of the query
+        size_info = f"\n\n---\nTotal content size: {total_size:,} bytes from {len(file_paths)} files"
+
+        # Estimate tokens for the full input
+        full_content = content + size_info + f"\n\nQuery: {query}"
+    else:
+        # No files: query-only mode
+        content = ""
+        total_size = 0
+        size_info = ""
+        full_content = query
+
     estimated_tokens = estimate_tokens(full_content)
     token_info = f"\nEstimated tokens: ~{estimated_tokens:,}"
     if model_context_length:
@@ -122,6 +126,13 @@ async def consultation_impl(
         elif thinking_budget == -4:
             # Gemini 3 effort=low (thinkingLevel=low)
             token_info += ", reasoning: effort=low"
+        elif thinking_budget == -5:
+            # Opus 4.7 / Grok 4.20: adaptive reasoning, enabled only.
+            # Model ignores effort/max_tokens, so mid and think produce identical API calls.
+            if mode == "mid":
+                token_info += ", reasoning: adaptive (model ignores effort; mid ≡ think)"
+            else:
+                token_info += ", reasoning: adaptive (model ignores effort/budget)"
         elif thinking_budget > 0:
             # Calculate percentage of maximum possible reasoning tokens
             from .token_utils import THINKING_LIMITS, MAX_REASONING_TOKENS
@@ -146,6 +157,12 @@ async def consultation_impl(
             f"Collected {len(file_paths)} files ({total_size:,} bytes){token_info}"
         )
 
+    mode_str = f" [{mode}]" if mode != "fast" else ""
+    metadata_footer = (
+        f"Processed {len(file_paths)} files ({total_size:,} bytes) "
+        f"with {model}{mode_str} ({provider}){token_info}"
+    )
+
     # Handle output file if specified
     if output_file:
         # Save just the LLM response (without the metadata)
@@ -154,13 +171,8 @@ async def consultation_impl(
         if save_error:
             return f"Error saving output: {save_error}"
 
-        # Return brief confirmation message
-        return f"Result has been saved to {save_path}"
+        # Confirmation + metadata footer so the caller can see what actually ran
+        return f"Result has been saved to {save_path}\n\n---\n{metadata_footer}"
 
     # Normal mode: return full response with metadata
-    mode_str = f" [{mode}]" if mode != "fast" else ""
-    return (
-        f"{response}\n\n---\n"
-        f"Processed {len(file_paths)} files ({total_size:,} bytes) "
-        f"with {model}{mode_str} ({provider}){token_info}"
-    )
+    return f"{response}\n\n---\n{metadata_footer}"

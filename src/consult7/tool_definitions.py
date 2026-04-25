@@ -6,14 +6,14 @@ class ToolDescriptions:
 
     MODEL_EXAMPLES = {
         "openrouter": [
-            '"openai/gpt-5.4" (GPT-5.4, 1M context)',
+            '"openai/gpt-5.5" (GPT-5.5, 1M context)',
             '"google/gemini-3.1-pro-preview" (Gemini 3.1 Pro, 1M context, flagship reasoning)',
             '"google/gemini-3-flash-preview" (Gemini 3 Flash, 1M context, fast)',
             '"google/gemini-3.1-flash-lite-preview" (Gemini 3.1 Flash Lite, 1M context, ultra fast)',
-            '"anthropic/claude-opus-4.6" (Claude Opus 4.6, 200k context)',
-            '"anthropic/claude-sonnet-4.6" (Claude Sonnet 4.6, 200k context)',
+            '"anthropic/claude-opus-4.7" (Claude Opus 4.7, 1M context, adaptive thinking)',
+            '"anthropic/claude-sonnet-4.6" (Claude Sonnet 4.6, 1M context)',
             '"anthropic/claude-haiku-4.5" (Claude Haiku 4.5, 200k context, budget)',
-            '"x-ai/grok-4" (Grok 4, 256k context)',
+            '"x-ai/grok-4.20" (Grok 4.20, 2M context)',
             '"x-ai/grok-4.1-fast" (Grok 4.1 Fast, 2M context)',
         ],
     }
@@ -32,11 +32,11 @@ TIPS:
 - Long instructions: Put them in a file, include in files list, keep query short
 
 Quick mnemonics:
-- gptt = openai/gpt-5.4 + think (latest GPT, deep reasoning)
+- gptt = openai/gpt-5.5 + think (latest GPT, deep reasoning)
 - gemt = google/gemini-3.1-pro-preview + think (Gemini 3.1 Pro, flagship reasoning)
-- grot = x-ai/grok-4 + think (Grok 4, deep reasoning)
-- oput = anthropic/claude-opus-4.6 + think (Claude Opus, deep reasoning)
-- opuf = anthropic/claude-opus-4.6 + fast (Claude Opus, no reasoning)
+- grot = x-ai/grok-4.20 + think (Grok 4.20, deep reasoning)
+- oput = anthropic/claude-opus-4.7 + think (Claude Opus, adaptive thinking)
+- opuf = anthropic/claude-opus-4.7 + fast (Claude Opus, no reasoning)
 - gemf = google/gemini-3-flash-preview + fast (Gemini 3 Flash, ultra fast)
 - ULTRA = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight)
 
@@ -82,8 +82,8 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
         return (
             "Optional: Enable Zero Data Retention. When true, routes only to endpoints "
             "with ZDR policy (prompts not retained by provider). Default: false. "
-            "ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.6, GPT-5. "
-            "Not available: GPT-5.4, Grok 4"
+            "ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.7, GPT-5. "
+            "Not available: GPT-5.5, Grok 4.20"
         )
 
     @classmethod
@@ -94,5 +94,5 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
             "- fast: No reasoning, fastest\n"
             "- mid: Moderate reasoning\n"
             "- think: Maximum reasoning for deepest analysis\n\n"
-            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT-5.4)"
+            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT-5.5)"
         )

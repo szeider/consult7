@@ -20,6 +20,14 @@ DEFAULT_IGNORED = [
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODELS_URL = "https://openrouter.ai/api/v1/models"
 
+# OpenRouter Fusion (multi-model deliberation with a judge)
+# A panel of frontier models answers in parallel, a judge compares them, and the
+# judge writes the final answer. consult7 uses the default "Quality" panel
+# (opus + gpt + gemini-pro, auto-tracking '~latest' aliases) by leaving
+# analysis_models/model unset. mode maps to the web-search/fetch depth budget.
+FUSION_MODEL = "openrouter/fusion"
+FUSION_MAX_TOOL_CALLS = {"fast": 2, "mid": 8, "think": 16}  # max_tool_calls per panel/judge step
+
 # API constants
 DEFAULT_TEMPERATURE = 0.7  # Default temperature for all providers
 OPENROUTER_TIMEOUT = 1000.0  # ~17 minutes - very generous timeout for API calls
@@ -28,7 +36,7 @@ DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
 LLM_CALL_TIMEOUT = 1000.0  # ~17 minutes - very generous timeout for LLM calls
 
 # Application constants
-SERVER_VERSION = "3.6.1"
+SERVER_VERSION = "3.7.0"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 MIN_ARGS = 1

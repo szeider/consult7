@@ -16,6 +16,8 @@ from ..constants import (
     DEFAULT_TEMPERATURE,
     OPENROUTER_TIMEOUT,
     API_FETCH_TIMEOUT,
+    FUSION_MODEL,
+    FUSION_MAX_TOOL_CALLS,
 )
 from ..token_utils import (
     TOKEN_SAFETY_FACTOR,
@@ -79,17 +81,21 @@ class OpenRouterProvider(BaseProvider):
         thinking_mode: bool = False,
         thinking_budget: Optional[int] = None,
         zdr: bool = False,
-    ) -> Tuple[str, Optional[str], Optional[int]]:
+        mode: str = "fast",
+    ) -> Tuple[str, Optional[str], Optional[int], Optional[float]]:
         """Call OpenRouter API with the content and query.
 
         Returns:
-            Tuple of (response, error, reasoning_budget_used)
+            Tuple of (response, error, reasoning_budget_used, cost_usd).
+            cost_usd is the call's cost in USD from OpenRouter's usage accounting,
+            or None if unavailable (e.g. on errors before the request completes).
         """
         if not api_key:
             return (
                 "",
                 "No API key provided for OpenRouter. Start consult7 with your key: "
                 "`consult7 sk-or-v1-...` (or configure --api-key in your MCP client).",
+                None,
                 None,
             )
 
@@ -100,7 +106,7 @@ class OpenRouterProvider(BaseProvider):
                 model_info = {"context_length": DEFAULT_CONTEXT_LENGTH}
             context_length = model_info.get("context_length", DEFAULT_CONTEXT_LENGTH)
         except Exception as e:
-            return "", str(e), None
+            return "", str(e), None, None
 
         # Estimate tokens for the input
         system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
@@ -167,6 +173,7 @@ class OpenRouterProvider(BaseProvider):
                             f"Try reducing file count/size or using a model with larger context."
                         ),
                         0,
+                        None,
                     )
                 else:
                     # Only too large because of reasoning
@@ -180,6 +187,7 @@ class OpenRouterProvider(BaseProvider):
                             f"Try without |thinking suffix."
                         ),
                         0,
+                        None,
                     )
             else:
                 return (
@@ -191,6 +199,7 @@ class OpenRouterProvider(BaseProvider):
                         f"Try using a model with larger context or reducing file count/size."
                     ),
                     0,
+                    None,
                 )
 
         headers = {
@@ -210,11 +219,24 @@ class OpenRouterProvider(BaseProvider):
             "temperature": DEFAULT_TEMPERATURE,
             "max_tokens": max_output_tokens,
             "stream": True,  # Use streaming to prevent timeout truncation
+            "usage": {"include": True},  # Ask OpenRouter to report the call cost (USD)
         }
 
         # Add Zero Data Retention routing if requested
         if zdr:
             data["provider"] = {"zdr": True}
+
+        # OpenRouter Fusion: multi-model deliberation with a judge.
+        # Inject the fusion plugin with the default "Quality" panel (analysis_models/model
+        # left unset). Fusion runs its own panel + judge, so we never add reasoning params;
+        # instead mode maps to max_tool_calls, the per-step web-search/fetch depth budget.
+        if model_name == FUSION_MODEL:
+            data["plugins"] = [
+                {
+                    "id": "fusion",
+                    "max_tool_calls": FUSION_MAX_TOOL_CALLS.get(mode, 8),
+                }
+            ]
 
         # Add reasoning mode if thinking_mode is enabled
         if thinking_mode:
@@ -227,7 +249,7 @@ class OpenRouterProvider(BaseProvider):
                 effort_level = "high" if thinking_budget == "enabled_high" else "low"
                 data["reasoning"] = {"effort": effort_level}
             elif uses_toggle_reasoning:
-                # Claude Opus 4.7 / Grok 4.20: adaptive/automatic reasoning — enable only
+                # Claude Opus 4.8 / Grok 4.20: adaptive/automatic reasoning — enable only
                 # reasoning.effort and reasoning.max_tokens are ignored/unsupported
                 data["reasoning"] = {"enabled": True}
             else:
@@ -239,6 +261,7 @@ class OpenRouterProvider(BaseProvider):
             # This prevents intermediate proxy/server timeouts
             collected_content = []
             finish_reason = None
+            cost = None  # USD cost, captured from the final usage chunk
 
             async with httpx.AsyncClient() as client:
                 async with client.stream(
@@ -265,15 +288,17 @@ class OpenRouterProvider(BaseProvider):
                                     f"Zero Data Retention not available for model '{model_name}'. "
                                     "No OpenRouter endpoint for this model meets the ZDR policy. "
                                     "Retry with zdr=false, or pick a ZDR-supported model "
-                                    "(e.g. google/gemini-3.1-pro-preview, anthropic/claude-opus-4.7). "
+                                    "(e.g. google/gemini-3.1-pro-preview, anthropic/claude-opus-4.8). "
                                     f"Raw upstream response: {body_text}"
                                 ),
+                                None,
                                 None,
                             )
 
                         return (
                             "",
                             f"API error: {response.status_code} - {body_text}",
+                            None,
                             None,
                         )
 
@@ -291,6 +316,12 @@ class OpenRouterProvider(BaseProvider):
 
                             try:
                                 chunk = json.loads(data_str)
+
+                                # Capture cost from the usage chunk (sent near the
+                                # end of the stream, often with an empty choices list)
+                                usage = chunk.get("usage")
+                                if usage and usage.get("cost") is not None:
+                                    cost = usage["cost"]
 
                                 # Extract content from delta
                                 if "choices" in chunk and chunk["choices"]:
@@ -312,7 +343,7 @@ class OpenRouterProvider(BaseProvider):
             full_response = "".join(collected_content)
 
             if not full_response:
-                return "", "No content received from API (empty response)", None
+                return "", "No content received from API (empty response)", None, cost
 
             llm_response = process_llm_response(full_response)
 
@@ -323,20 +354,21 @@ class OpenRouterProvider(BaseProvider):
             # Return reasoning budget (for special reasoning modes, return markers)
             # -1: OpenAI effort=high, -2: OpenAI effort=medium
             # -3: Gemini 3 effort=high, -4: Gemini 3 effort=low
-            # -5: Opus 4.7 / Grok 4.20 reasoning.enabled=true (adaptive)
+            # -5: Opus 4.8 / Grok 4.20 reasoning.enabled=true (adaptive)
             if thinking_mode and uses_effort_reasoning:
                 marker = -1 if thinking_budget == "effort_high" else -2
-                return (llm_response, None, marker)
+                return (llm_response, None, marker, cost)
             elif thinking_mode and uses_enabled_reasoning:
                 marker = -3 if thinking_budget == "enabled_high" else -4
-                return (llm_response, None, marker)
+                return (llm_response, None, marker, cost)
             elif thinking_mode and uses_toggle_reasoning:
-                return (llm_response, None, -5)
+                return (llm_response, None, -5, cost)
             else:
                 return (
                     llm_response,
                     None,
                     reasoning_budget_actual if thinking_mode else None,
+                    cost,
                 )
 
         except httpx.TimeoutException:
@@ -346,6 +378,7 @@ class OpenRouterProvider(BaseProvider):
                 f"Request timed out after {OPENROUTER_TIMEOUT:.0f} seconds ({timeout_mins:.0f} minutes). "
                 f"Model may be overloaded or experiencing issues.",
                 None,
+                None,
             )
         except Exception as e:
-            return "", f"Error calling API: {e}", None
+            return "", f"Error calling API: {e}", None, None

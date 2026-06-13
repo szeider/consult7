@@ -54,7 +54,7 @@ async def test_api_connection(server: Consult7Server):
         print(f"\nError: Unknown provider '{server.provider}'")
         return False
 
-    response, error, _ = await provider_instance.call_llm(
+    response, error, _, _ = await provider_instance.call_llm(
         test_content, test_query, test_model, server.api_key
     )
 

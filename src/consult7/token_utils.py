@@ -55,8 +55,9 @@ THINKING_LIMITS = {
     "google/gemini-2.5-pro": 32_768,
     "google/gemini-2.5-flash": 24_576,
     # Anthropic Claude models
-    # Opus 4.7: adaptive thinking only, reasoning.max_tokens/effort ignored — use "toggle"
-    "anthropic/claude-opus-4.7": "toggle",
+    # Opus 4.8: adaptive thinking only, reasoning.max_tokens/effort ignored — use "toggle"
+    "anthropic/claude-opus-4.8": "toggle",
+    "anthropic/claude-opus-4.7": "toggle",  # legacy
     "anthropic/claude-opus-4.6": 31_999,  # legacy
     "anthropic/claude-sonnet-4.6": 31_999,
     "anthropic/claude-haiku-4.5": 31_999,
@@ -78,7 +79,8 @@ MODEL_REASONING_BEHAVIOR = {
     "openai/gpt-5.4": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.2": REASONING_FROM_OUTPUT,  # legacy
     # Anthropic: reasoning consumes max_tokens
-    "anthropic/claude-opus-4.7": REASONING_FROM_OUTPUT,
+    "anthropic/claude-opus-4.8": REASONING_FROM_OUTPUT,
+    "anthropic/claude-opus-4.7": REASONING_FROM_OUTPUT,  # legacy
     "anthropic/claude-opus-4.6": REASONING_FROM_OUTPUT,  # legacy
     "anthropic/claude-sonnet-4.6": REASONING_FROM_OUTPUT,
     "anthropic/claude-haiku-4.5": REASONING_FROM_OUTPUT,
@@ -104,7 +106,8 @@ MODEL_MAX_OUTPUT = {
     "openai/gpt-5.5": 128_000,
     "openai/gpt-5.4": 128_000,  # legacy
     "openai/gpt-5.2": 128_000,  # legacy
-    "anthropic/claude-opus-4.7": 128_000,
+    "anthropic/claude-opus-4.8": 128_000,
+    "anthropic/claude-opus-4.7": 128_000,  # legacy
     "anthropic/claude-opus-4.6": 32_000,  # legacy
     "anthropic/claude-sonnet-4.6": 64_000,
     "anthropic/claude-haiku-4.5": 16_000,
@@ -154,7 +157,7 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
         # Gemini 3 Pro: reasoning is dynamic, use dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value == "toggle_on":
-        # Opus 4.7 / Grok 4.20: adaptive reasoning, use dynamic ratio
+        # Opus 4.8 / Grok 4.20: adaptive reasoning, use dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value is not None:
         thinking_budget = thinking_budget_value
@@ -230,7 +233,7 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
         # Return different markers for mid vs think
         return "enabled_low" if mode == "mid" else "enabled_high"
 
-    # Claude Opus 4.7 / Grok 4.20: enable reasoning only (adaptive/automatic)
+    # Claude Opus 4.8 / Grok 4.20: enable reasoning only (adaptive/automatic)
     # reasoning.effort and reasoning.max_tokens are ignored/unsupported
     if limit == "toggle":
         return "toggle_on"
@@ -299,7 +302,7 @@ def calculate_reasoning_max_tokens(
         return int(model_max * DYNAMIC_REASONING_RATIO)
 
     elif thinking_budget == "toggle_on":
-        # Opus 4.7 / Grok 4.20: adaptive/automatic reasoning — no budget knob
+        # Opus 4.8 / Grok 4.20: adaptive/automatic reasoning — no budget knob
         # Reasoning counts toward max_tokens, so give generous headroom
         return int(model_max * DYNAMIC_REASONING_RATIO)
 

@@ -48,7 +48,8 @@ class BaseProvider(ABC):
         thinking_mode: bool = False,
         thinking_budget: Optional[int] = None,
         zdr: bool = False,
-    ) -> Tuple[str, Optional[str], Optional[int]]:
+        mode: str = "fast",
+    ) -> Tuple[str, Optional[str], Optional[int], Optional[float]]:
         """Call the LLM and return the response.
 
         Args:
@@ -59,8 +60,11 @@ class BaseProvider(ABC):
             thinking_mode: Whether thinking/reasoning mode is enabled
             thinking_budget: Number of thinking tokens to use (if applicable)
             zdr: Whether to enforce Zero Data Retention routing
+            mode: Performance mode ("fast"/"mid"/"think"); used by models like
+                Fusion that map mode to a deliberation knob rather than reasoning tokens
 
         Returns:
-            Tuple of (response, error_message, actual_thinking_budget_used)
+            Tuple of (response, error_message, actual_thinking_budget_used, cost_usd).
+            cost_usd is the call's cost in USD, or None if unavailable.
         """
         pass

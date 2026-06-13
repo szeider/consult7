@@ -4,12 +4,32 @@ import asyncio
 import logging
 from typing import Optional
 
-from .constants import DEFAULT_CONTEXT_LENGTH, LLM_CALL_TIMEOUT
+from .constants import (
+    DEFAULT_CONTEXT_LENGTH,
+    LLM_CALL_TIMEOUT,
+    FUSION_MODEL,
+    FUSION_MAX_TOOL_CALLS,
+)
 from .file_processor import expand_file_patterns, format_content, save_output_to_file
 from .token_utils import estimate_tokens, get_thinking_budget, calculate_max_file_size
 from .providers import PROVIDERS
 
 logger = logging.getLogger("consult7")
+
+
+def format_cost(cost: Optional[float]) -> Optional[str]:
+    """Format a USD cost for the metadata footer.
+
+    Returns a string like "$0.2745" (or more decimals for sub-cent calls),
+    or None when no cost is available so the footer can omit it.
+    """
+    if cost is None:
+        return None
+    if cost <= 0:
+        return "$0.00"
+    if cost < 0.0001:
+        return f"${cost:.6f}"  # tiny calls: keep a couple significant digits
+    return f"${cost:.4f}"
 
 
 async def get_model_context_info(model_name: str, provider: str, api_key: Optional[str]) -> dict:
@@ -95,7 +115,7 @@ async def consultation_impl(
     # Call the provider with generous timeout protection (10 minutes)
     try:
         async with asyncio.timeout(LLM_CALL_TIMEOUT):
-            response, error, thinking_budget = await provider_instance.call_llm(
+            response, error, thinking_budget, cost = await provider_instance.call_llm(
                 content + size_info,
                 query,
                 model,
@@ -103,6 +123,7 @@ async def consultation_impl(
                 thinking_mode,
                 thinking_budget_value,
                 zdr,
+                mode,
             )
     except asyncio.TimeoutError:
         return (
@@ -127,7 +148,7 @@ async def consultation_impl(
             # Gemini 3 effort=low (thinkingLevel=low)
             token_info += ", reasoning: effort=low"
         elif thinking_budget == -5:
-            # Opus 4.7 / Grok 4.20: adaptive reasoning, enabled only.
+            # Opus 4.8 / Grok 4.20: adaptive reasoning, enabled only.
             # Model ignores effort/max_tokens, so mid and think produce identical API calls.
             if mode == "mid":
                 token_info += ", reasoning: adaptive (model ignores effort; mid ≡ think)"
@@ -150,6 +171,19 @@ async def consultation_impl(
             )
         else:
             token_info += ", reasoning disabled (insufficient context)"
+
+    # Fusion runs a multi-model panel + judge instead of single-model reasoning;
+    # report the panel and the mode-derived research-depth budget.
+    if model == FUSION_MODEL:
+        tool_calls = FUSION_MAX_TOOL_CALLS.get(mode, 8)
+        token_info += (
+            f", fusion: Quality panel (opus+gpt+gemini-pro) + judge, "
+            f"max_tool_calls={tool_calls}"
+        )
+
+    # Report the call's USD cost (from OpenRouter usage accounting) when available
+    if (cost_str := format_cost(cost)) is not None:
+        token_info += f", cost: {cost_str}"
 
     if error:
         return (

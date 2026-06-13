@@ -28,7 +28,7 @@
 ### Deep analysis with reasoning
 * **Files:** `["/Users/john/webapp/src/*.py", "/Users/john/webapp/auth/*.py", "/Users/john/webapp/api/*.js"]`
 * **Query:** "Analyze the authentication flow across this codebase. Think step by step about security vulnerabilities and suggest improvements"
-* **Model:** `"anthropic/claude-opus-4.7"`
+* **Model:** `"anthropic/claude-opus-4.8"`
 * **Mode:** `"think"`
 
 ### Generate a report saved to file
@@ -51,10 +51,21 @@ Consult7 supports **Google's Gemini 3.1** family:
 - **`gemf`** = Gemini 3 Flash + fast (ultra fast)
 - **`gptt`** = GPT-5.5 + think (latest GPT)
 - **`grot`** = Grok 4.20 + think (automatic reasoning)
-- **`oput`** = Claude Opus 4.7 + think (adaptive thinking)
+- **`oput`** = Claude Opus 4.8 + think (adaptive thinking)
 - **`ULTRA`** = Run GEMT, GPTT, GROT, and OPUT in parallel (4 frontier models)
+- **`FUSE`** = Fusion: a frontier panel deliberates and a judge synthesizes, in one call
 
 These mnemonics make it easy to reference model+mode combinations in your queries.
+
+## Featured: Fusion (multi-model analysis)
+
+Consult7 supports OpenRouter's **Fusion** (`openrouter/fusion`) — a single call where a panel of frontier models (Opus, GPT, Gemini Pro) answers your query in parallel and a judge model synthesizes their responses into one answer. Reach for it on hard questions where multiple perspectives help and the cost of being wrong outweighs a few extra completions.
+
+- **Context:** 128K — smaller than the 1M–2M single models, so it's best for hard questions on moderate input, not giant file bundles.
+- **Mode → research depth:** `fast` / `mid` / `think` map the panel's web-search/fetch budget to `max_tool_calls` of 2 / 8 / 16.
+- **Mnemonic:** `FUSE` = `openrouter/fusion`.
+
+Trivial prompts answer directly (no panel); the panel fires only when the question warrants deliberation. Fusion is billed per panel run, so it costs more than a single-model call.
 
 ## Installation
 
@@ -107,20 +118,22 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | `google/gemini-3.1-pro-preview` | 1M | **Flagship reasoning model** |
 | `google/gemini-3-flash-preview` | 1M | **Gemini 3 Flash, ultra fast** |
 | `google/gemini-3.1-flash-lite-preview` | 1M | Ultra-fast lite model |
-| `anthropic/claude-opus-4.7` | 1M | Best quality, adaptive thinking |
+| `anthropic/claude-opus-4.8` | 1M | Best quality, adaptive thinking |
 | `anthropic/claude-sonnet-4.6` | 1M | Excellent reasoning, fast |
 | `anthropic/claude-haiku-4.5` | 200k | Budget, very fast |
 | `x-ai/grok-4.20` | 2M | Automatic reasoning, huge context |
 | `x-ai/grok-4.1-fast` | 2M | Largest context window |
+| `openrouter/fusion` | 128k | Multi-model panel + judge (see Featured: Fusion) |
 
 **Quick mnemonics:**
 - `gptt` = `openai/gpt-5.5` + `think` (latest GPT, deep reasoning)
 - `gemt` = `google/gemini-3.1-pro-preview` + `think` (Gemini 3.1 Pro, flagship reasoning)
 - `grot` = `x-ai/grok-4.20` + `think` (Grok 4.20, automatic reasoning)
-- `oput` = `anthropic/claude-opus-4.7` + `think` (Claude Opus, adaptive thinking)
-- `opuf` = `anthropic/claude-opus-4.7` + `fast` (Claude Opus, no reasoning)
+- `oput` = `anthropic/claude-opus-4.8` + `think` (Claude Opus, adaptive thinking)
+- `opuf` = `anthropic/claude-opus-4.8` + `fast` (Claude Opus, no reasoning)
 - `gemf` = `google/gemini-3-flash-preview` + `fast` (Gemini 3 Flash, ultra fast)
 - `ULTRA` = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight)
+- `FUSE` = `openrouter/fusion` (one call: a frontier panel deliberates, a judge synthesizes; mode sets web-research depth)
 
 You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the [full model list](https://openrouter.ai/models). File size limits are automatically calculated based on each model's context window.
 
@@ -160,8 +173,8 @@ The consultation tool accepts the following parameters:
   - Useful for generating reports, documentation, or analyses without flooding the agent's context
 - **zdr** (optional): Enable Zero Data Retention routing (default: `false`)
   - When `true`, routes only to endpoints with ZDR policy (prompts not retained by provider)
-  - ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.7, GPT-5
-  - Not available: GPT-5.5, Grok 4.20 (returns error)
+  - ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.8, GPT-5, GPT-5.5
+  - Not available: Grok 4.20 (returns error)
 
 ## Usage Examples
 
@@ -209,6 +222,16 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.7.0
+- Added **Fusion** (`openrouter/fusion`) — a multi-model panel plus a judge in one call; `mode` maps to web-research depth (`fast`/`mid`/`think` → `max_tool_calls` 2/8/16). New `FUSE` mnemonic.
+- Upgraded Claude Opus 4.7 → **4.8** (1M context, adaptive thinking); `oput`/`opuf` now point to 4.8, and 4.7 is kept as a legacy ID.
+- The response footer now reports the **call cost in USD** (from OpenRouter usage accounting), e.g. `cost: $0.0923`.
+
+### v3.6.1
+- Toggle-reasoning footer now distinguishes `mid` vs `think` for adaptive models (Opus, Grok)
+- Friendlier error message when a model has no Zero Data Retention endpoint
+- `output_file` return now includes the metadata footer so callers can verify what ran
 
 ### v3.6.0
 - Upgraded models: GPT-5.5, Claude Opus 4.7, Grok 4.20

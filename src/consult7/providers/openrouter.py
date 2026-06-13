@@ -323,6 +323,25 @@ class OpenRouterProvider(BaseProvider):
                                 if usage and usage.get("cost") is not None:
                                     cost = usage["cost"]
 
+                                # A mid-stream error arrives as a data chunk with a
+                                # top-level "error" key (after the initial 200). Surface
+                                # it instead of dropping it and later reporting a
+                                # misleading "No content received". Preserve any cost
+                                # already captured (fast-fail: return immediately).
+                                error_obj = chunk.get("error")
+                                if error_obj:
+                                    err_msg = (
+                                        error_obj.get("message", str(error_obj))
+                                        if isinstance(error_obj, dict)
+                                        else str(error_obj)
+                                    )
+                                    return (
+                                        "",
+                                        f"API error (mid-stream): {err_msg}",
+                                        None,
+                                        cost,
+                                    )
+
                                 # Extract content from delta
                                 if "choices" in chunk and chunk["choices"]:
                                     choice = chunk["choices"][0]

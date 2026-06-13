@@ -223,6 +223,9 @@ claude mcp remove consult7 -s user
 
 ## Version History
 
+### v3.7.1
+- Surface mid-stream API errors: when OpenRouter sends an error as a streaming data chunk (after the initial 200), the call now returns that error message instead of a misleading "No content received".
+
 ### v3.7.0
 - Added **Fusion** (`openrouter/fusion`) — a multi-model panel plus a judge in one call; `mode` maps to web-research depth (`fast`/`mid`/`think` → `max_tool_calls` 2/8/16). New `FUSE` mnemonic.
 - Upgraded Claude Opus 4.7 → **4.8** (1M context, adaptive thinking); `oput`/`opuf` now point to 4.8, and 4.7 is kept as a legacy ID.

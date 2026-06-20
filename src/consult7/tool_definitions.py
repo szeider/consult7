@@ -31,6 +31,7 @@ STATELESS: Each call must contain complete absolute paths. No context is remembe
 TIPS:
 - Hard questions: Spawn 3 parallel calls with varied query formulations
 - Long instructions: Put them in a file, include in files list, keep query short
+- WARNING: a query that is BOTH long AND densely packed with special/math characters (< > | & =, parens, LaTeX) can make the call fail with a misleading "'model' is a required property" error (trailing fields dropped). Put bulk/symbolic detail in a file and keep query short and prose-only.
 
 Quick mnemonics:
 - gptt = openai/gpt-5.5 + think (latest GPT, deep reasoning)
@@ -68,7 +69,13 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
     @classmethod
     def get_query_description(cls) -> str:
         """Get the query parameter description."""
-        return "Your question about the files"
+        return (
+            "Your question about the files. KEEP SHORT and mostly prose. A query that is both "
+            "long AND densely packed with special/math characters (< > | & =, parentheses, "
+            "LaTeX) can make the call fail with a misleading \"'model' is a required property\" "
+            "error (the trailing model/mode fields get dropped). Put long or symbol-heavy detail "
+            "in a file (via `files`) and keep `query` short."
+        )
 
     @classmethod
     def get_output_file_description(cls) -> str:
@@ -96,5 +103,9 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
             "- fast: No reasoning, fastest\n"
             "- mid: Moderate reasoning\n"
             "- think: Maximum reasoning for deepest analysis\n\n"
-            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT-5.5)"
+            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT-5.5). "
+            "For FUSION this won't help (the cost is the panel of models, not reasoning "
+            "depth) — instead retry with a single model (e.g. openai/gpt-5.5, "
+            "google/gemini-3.1-pro-preview) or split the question. On timeout consult7 "
+            "returns the partial output with a [TRUNCATED] marker rather than discarding it."
         )

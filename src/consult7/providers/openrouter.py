@@ -1,5 +1,6 @@
 """OpenRouter provider implementation for Consult7."""
 
+import asyncio
 import json
 import logging
 from typing import Optional, Tuple
@@ -256,14 +257,30 @@ class OpenRouterProvider(BaseProvider):
                 # Older Anthropic, Gemini 2.5, and others: use max_tokens
                 data["reasoning"] = {"max_tokens": reasoning_budget_actual}
 
-        try:
-            # Use streaming to keep connection alive during long reasoning
-            # This prevents intermediate proxy/server timeouts
-            collected_content = []
-            finish_reason = None
-            cost = None  # USD cost, captured from the final usage chunk
+        # Reasoning-budget value to report back, computed once so the normal and
+        # timeout-partial return paths agree (markers: -1/-2 OpenAI effort high/med,
+        # -3/-4 Gemini 3 effort high/low, -5 Opus 4.8 / Grok adaptive enabled; an
+        # int for token-based reasoning; None when not in thinking mode).
+        if thinking_mode and uses_effort_reasoning:
+            budget_return = -1 if thinking_budget == "effort_high" else -2
+        elif thinking_mode and uses_enabled_reasoning:
+            budget_return = -3 if thinking_budget == "enabled_high" else -4
+        elif thinking_mode and uses_toggle_reasoning:
+            budget_return = -5
+        else:
+            budget_return = reasoning_budget_actual if thinking_mode else None
 
-            async with httpx.AsyncClient() as client:
+        collected_content = []
+        finish_reason = None
+        cost = None  # USD cost, captured from the final usage chunk
+        timed_out = False
+
+        try:
+            # Stream to keep the connection alive during long reasoning (prevents
+            # proxy/server truncation). asyncio.timeout caps total wall-clock so
+            # that on timeout we keep whatever streamed (collected_content) instead
+            # of discarding it; the httpx timeout guards a byte-silent connection.
+            async with asyncio.timeout(OPENROUTER_TIMEOUT), httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",
                     OPENROUTER_URL,
@@ -358,46 +375,48 @@ class OpenRouterProvider(BaseProvider):
                                 # Skip malformed chunks
                                 continue
 
-            # Combine all chunks
-            full_response = "".join(collected_content)
-
-            if not full_response:
-                return "", "No content received from API (empty response)", None, cost
-
-            llm_response = process_llm_response(full_response)
-
-            # Log finish_reason for debugging truncation issues
-            if finish_reason and finish_reason != "stop":
-                logger.warning(f"Response finish_reason: {finish_reason} (may indicate truncation)")
-
-            # Return reasoning budget (for special reasoning modes, return markers)
-            # -1: OpenAI effort=high, -2: OpenAI effort=medium
-            # -3: Gemini 3 effort=high, -4: Gemini 3 effort=low
-            # -5: Opus 4.8 / Grok 4.20 reasoning.enabled=true (adaptive)
-            if thinking_mode and uses_effort_reasoning:
-                marker = -1 if thinking_budget == "effort_high" else -2
-                return (llm_response, None, marker, cost)
-            elif thinking_mode and uses_enabled_reasoning:
-                marker = -3 if thinking_budget == "enabled_high" else -4
-                return (llm_response, None, marker, cost)
-            elif thinking_mode and uses_toggle_reasoning:
-                return (llm_response, None, -5, cost)
-            else:
-                return (
-                    llm_response,
-                    None,
-                    reasoning_budget_actual if thinking_mode else None,
-                    cost,
-                )
-
-        except httpx.TimeoutException:
-            timeout_mins = OPENROUTER_TIMEOUT / 60
-            return (
-                "",
-                f"Request timed out after {OPENROUTER_TIMEOUT:.0f} seconds ({timeout_mins:.0f} minutes). "
-                f"Model may be overloaded or experiencing issues.",
-                None,
-                None,
-            )
+        except (asyncio.TimeoutError, httpx.TimeoutException):
+            # Total budget elapsed, or the connection stalled with no bytes. Keep
+            # the partial buffer — fall through to the partial-return path below.
+            timed_out = True
         except Exception as e:
             return "", f"Error calling API: {e}", None, None
+
+        # Combine all chunks
+        full_response = "".join(collected_content)
+
+        # Timed out: return the partial stream with a clear marker instead of a
+        # bare error (usually still useful, and already billed upstream). cost is
+        # normally None here because the usage chunk arrives at stream end.
+        if timed_out:
+            budget_mins = OPENROUTER_TIMEOUT / 60
+            if full_response:
+                marker = (
+                    f"\n\n[TRUNCATED — output incomplete. Exceeded the "
+                    f"{OPENROUTER_TIMEOUT:.0f}s (~{budget_mins:.0f} min) wall-clock cap; "
+                    f"the text above is what streamed before the cap. For FUSION, retry with "
+                    f"a single model (e.g. openai/gpt-5.5, google/gemini-3.1-pro-preview) "
+                    f"or split the question.]"
+                )
+                return (process_llm_response(full_response) + marker, None, budget_return, cost)
+            return (
+                "",
+                (
+                    f"Request timed out after {OPENROUTER_TIMEOUT:.0f} seconds "
+                    f"(~{budget_mins:.0f} minutes) with no content received. The model may be "
+                    f"overloaded. For FUSION, retry with a single model or split the question."
+                ),
+                None,
+                cost,
+            )
+
+        if not full_response:
+            return "", "No content received from API (empty response)", None, cost
+
+        llm_response = process_llm_response(full_response)
+
+        # Log finish_reason for debugging truncation issues
+        if finish_reason and finish_reason != "stop":
+            logger.warning(f"Response finish_reason: {finish_reason} (may indicate truncation)")
+
+        return (llm_response, None, budget_return, cost)

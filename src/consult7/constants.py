@@ -30,13 +30,20 @@ FUSION_MAX_TOOL_CALLS = {"fast": 2, "mid": 8, "think": 16}  # max_tool_calls per
 
 # API constants
 DEFAULT_TEMPERATURE = 0.7  # Default temperature for all providers
-OPENROUTER_TIMEOUT = 1000.0  # ~17 minutes - very generous timeout for API calls
+# Total wall-clock budget for one streaming call (also the httpx per-operation
+# timeout). Fusion (panel + judge + web research) is the slowest call type; on
+# expiry the provider returns whatever it streamed so far rather than discarding
+# it. This is a safety brake we expect most calls to finish well within.
+OPENROUTER_TIMEOUT = 1800.0  # 30 minutes
 API_FETCH_TIMEOUT = 30.0  # 30 seconds for fetching model info
 DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
-LLM_CALL_TIMEOUT = 1000.0  # ~17 minutes - very generous timeout for LLM calls
+# Outer backstop in consultation.py. Set strictly above OPENROUTER_TIMEOUT so the
+# provider's graceful partial-return path always fires first; this only trips if
+# call_llm hangs *outside* the stream loop (get_model_info has its own timeout).
+LLM_CALL_TIMEOUT = OPENROUTER_TIMEOUT + 120.0  # backstop only (~32 minutes)
 
 # Application constants
-SERVER_VERSION = "3.7.1"
+SERVER_VERSION = "3.7.2"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 MIN_ARGS = 1

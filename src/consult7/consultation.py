@@ -90,7 +90,9 @@ async def consultation_impl(
         content, total_size = format_content(file_paths, errors, max_total_size, max_file_size)
 
         # Add size info that will be part of the query
-        size_info = f"\n\n---\nTotal content size: {total_size:,} bytes from {len(file_paths)} files"
+        size_info = (
+            f"\n\n---\nTotal content size: {total_size:,} bytes from {len(file_paths)} files"
+        )
 
         # Estimate tokens for the full input
         full_content = content + size_info + f"\n\nQuery: {query}"
@@ -112,7 +114,10 @@ async def consultation_impl(
     if not provider_instance:
         return f"Error: Unknown provider '{provider}'"
 
-    # Call the provider with generous timeout protection (10 minutes)
+    # Call the provider. The provider owns the real streaming budget
+    # (OPENROUTER_TIMEOUT) and returns partial output on timeout; this outer
+    # asyncio.timeout is only a backstop for a hang *outside* the stream loop,
+    # set strictly above the provider budget so the graceful path always wins.
     try:
         async with asyncio.timeout(LLM_CALL_TIMEOUT):
             response, error, thinking_budget, cost = await provider_instance.call_llm(
@@ -126,10 +131,11 @@ async def consultation_impl(
                 mode,
             )
     except asyncio.TimeoutError:
+        backstop_mins = LLM_CALL_TIMEOUT / 60
         return (
-            f"Error: Request timed out after {LLM_CALL_TIMEOUT} seconds "
-            f"(10 minutes). This is an extremely long time - "
-            f"the model or API may be having issues.\n\n"
+            f"Error: Request timed out after {LLM_CALL_TIMEOUT:.0f} seconds "
+            f"(~{backstop_mins:.0f} minutes) at the outer backstop - "
+            f"the model or API may be hanging.\n\n"
             f"Collected {len(file_paths)} files ({total_size:,} bytes){token_info}"
         )
 
@@ -177,8 +183,7 @@ async def consultation_impl(
     if model == FUSION_MODEL:
         tool_calls = FUSION_MAX_TOOL_CALLS.get(mode, 8)
         token_info += (
-            f", fusion: Quality panel (opus+gpt+gemini-pro) + judge, "
-            f"max_tool_calls={tool_calls}"
+            f", fusion: Quality panel (opus+gpt+gemini-pro) + judge, max_tool_calls={tool_calls}"
         )
 
     # Report the call's USD cost (from OpenRouter usage accounting) when available

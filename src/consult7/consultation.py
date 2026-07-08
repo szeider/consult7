@@ -160,6 +160,12 @@ async def consultation_impl(
                 token_info += ", reasoning: adaptive (model ignores effort; mid ≡ think)"
             else:
                 token_info += ", reasoning: adaptive (model ignores effort/budget)"
+        elif thinking_budget == -6:
+            # Fable 5 effort=high (mid tier)
+            token_info += ", reasoning: effort=high"
+        elif thinking_budget == -7:
+            # Fable 5 effort=xhigh (think tier; max reserved to avoid overthinking)
+            token_info += ", reasoning: effort=xhigh"
         elif thinking_budget > 0:
             # Calculate percentage of maximum possible reasoning tokens
             from .token_utils import THINKING_LIMITS, MAX_REASONING_TOKENS

@@ -55,6 +55,10 @@ THINKING_LIMITS = {
     "google/gemini-2.5-pro": 32_768,
     "google/gemini-2.5-flash": 24_576,
     # Anthropic Claude models
+    # Fable 5: OpenRouter DOES honor the native effort scale (verified: low/medium/high/
+    # xhigh/max all accepted, unlike Opus 4.8 which is toggle-only). Two productive tiers —
+    # max reserved (Anthropic + our token data: overthinking + ~2x reasoning tokens).
+    "anthropic/claude-fable-5": "effort_fable",
     # Opus 4.8: adaptive thinking only, reasoning.max_tokens/effort ignored — use "toggle"
     "anthropic/claude-opus-4.8": "toggle",
     "anthropic/claude-opus-4.7": "toggle",  # legacy
@@ -79,6 +83,7 @@ MODEL_REASONING_BEHAVIOR = {
     "openai/gpt-5.4": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.2": REASONING_FROM_OUTPUT,  # legacy
     # Anthropic: reasoning consumes max_tokens
+    "anthropic/claude-fable-5": REASONING_FROM_OUTPUT,
     "anthropic/claude-opus-4.8": REASONING_FROM_OUTPUT,
     "anthropic/claude-opus-4.7": REASONING_FROM_OUTPUT,  # legacy
     "anthropic/claude-opus-4.6": REASONING_FROM_OUTPUT,  # legacy
@@ -103,6 +108,7 @@ MODEL_REASONING_BEHAVIOR = {
 
 # Max output tokens by model (from OpenRouter API)
 MODEL_MAX_OUTPUT = {
+    "anthropic/claude-fable-5": 128_000,
     "openai/gpt-5.5": 128_000,
     "openai/gpt-5.4": 128_000,  # legacy
     "openai/gpt-5.2": 128_000,  # legacy
@@ -158,6 +164,9 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value == "toggle_on":
         # Opus 4.8 / Grok 4.20: adaptive reasoning, use dynamic ratio
+        thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
+    elif thinking_budget_value in ("effort_fable_high", "effort_fable_xhigh"):
+        # Fable 5: effort honored; reasoning consumes output budget — use dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value is not None:
         thinking_budget = thinking_budget_value
@@ -233,6 +242,12 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
         # Return different markers for mid vs think
         return "enabled_low" if mode == "mid" else "enabled_high"
 
+    # Claude Fable 5: OpenRouter honors the native effort scale. Two tiers kept in
+    # Anthropic's productive band (mid=high, think=xhigh); max is reserved to avoid
+    # overthinking and the ~2x reasoning-token cost on this premium model.
+    if limit == "effort_fable":
+        return "effort_fable_high" if mode == "mid" else "effort_fable_xhigh"
+
     # Claude Opus 4.8 / Grok 4.20: enable reasoning only (adaptive/automatic)
     # reasoning.effort and reasoning.max_tokens are ignored/unsupported
     if limit == "toggle":
@@ -304,6 +319,11 @@ def calculate_reasoning_max_tokens(
     elif thinking_budget == "toggle_on":
         # Opus 4.8 / Grok 4.20: adaptive/automatic reasoning — no budget knob
         # Reasoning counts toward max_tokens, so give generous headroom
+        return int(model_max * DYNAMIC_REASONING_RATIO)
+
+    elif thinking_budget in ("effort_fable_high", "effort_fable_xhigh"):
+        # Fable 5: effort honored; reasoning counts toward max_tokens. Give generous
+        # headroom (Fable can be verbose at higher effort) — 50% of the 128k ceiling.
         return int(model_max * DYNAMIC_REASONING_RATIO)
 
     elif isinstance(thinking_budget, int):

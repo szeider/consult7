@@ -110,7 +110,11 @@ class OpenRouterProvider(BaseProvider):
             return "", str(e), None, None
 
         # Estimate tokens for the input
-        system_msg = "You are a helpful assistant analyzing code and files. Be concise and specific in your responses."
+        system_msg = (
+            "You are a helpful assistant analyzing code and files. Be specific and precise. "
+            "Match the length of your answer to the task — thorough when the question needs "
+            "depth or breadth, short when it doesn't. Lead with the key finding; don't pad."
+        )
         if content:
             user_msg = f"Here are the files to analyze:\n\n{content}\n\nQuery: {query}"
         else:
@@ -127,6 +131,7 @@ class OpenRouterProvider(BaseProvider):
         uses_effort_reasoning = thinking_budget in ("effort_high", "effort_medium")
         uses_enabled_reasoning = thinking_budget in ("enabled_high", "enabled_low")
         uses_toggle_reasoning = thinking_budget == "toggle_on"
+        uses_effort_fable = thinking_budget in ("effort_fable_high", "effort_fable_xhigh")
 
         # Calculate max_tokens using model-aware reasoning budget calculation
         # This handles different models' reasoning token behavior:
@@ -145,6 +150,8 @@ class OpenRouterProvider(BaseProvider):
             "enabled_high",
             "enabled_low",
             "toggle_on",
+            "effort_fable_high",
+            "effort_fable_xhigh",
         ):
             reasoning_budget_actual = 0
         elif isinstance(thinking_budget, int):
@@ -253,20 +260,29 @@ class OpenRouterProvider(BaseProvider):
                 # Claude Opus 4.8 / Grok 4.20: adaptive/automatic reasoning — enable only
                 # reasoning.effort and reasoning.max_tokens are ignored/unsupported
                 data["reasoning"] = {"enabled": True}
+            elif uses_effort_fable:
+                # Claude Fable 5: OpenRouter honors the native effort scale (unlike Opus
+                # 4.8, which is toggle-only). Two tiers in the productive band; max is
+                # reserved (overthinking + ~2x reasoning-token cost on a premium model).
+                effort_level = "high" if thinking_budget == "effort_fable_high" else "xhigh"
+                data["reasoning"] = {"effort": effort_level}
             else:
                 # Older Anthropic, Gemini 2.5, and others: use max_tokens
                 data["reasoning"] = {"max_tokens": reasoning_budget_actual}
 
         # Reasoning-budget value to report back, computed once so the normal and
         # timeout-partial return paths agree (markers: -1/-2 OpenAI effort high/med,
-        # -3/-4 Gemini 3 effort high/low, -5 Opus 4.8 / Grok adaptive enabled; an
-        # int for token-based reasoning; None when not in thinking mode).
+        # -3/-4 Gemini 3 effort high/low, -5 Opus 4.8 / Grok adaptive enabled,
+        # -6/-7 Fable 5 effort high/xhigh; an int for token-based reasoning;
+        # None when not in thinking mode).
         if thinking_mode and uses_effort_reasoning:
             budget_return = -1 if thinking_budget == "effort_high" else -2
         elif thinking_mode and uses_enabled_reasoning:
             budget_return = -3 if thinking_budget == "enabled_high" else -4
         elif thinking_mode and uses_toggle_reasoning:
             budget_return = -5
+        elif thinking_mode and uses_effort_fable:
+            budget_return = -6 if thinking_budget == "effort_fable_high" else -7
         else:
             budget_return = reasoning_budget_actual if thinking_mode else None
 

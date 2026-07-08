@@ -52,10 +52,13 @@ Consult7 supports **Google's Gemini 3.1** family:
 - **`gptt`** = GPT-5.5 + think (latest GPT)
 - **`grot`** = Grok 4.20 + think (automatic reasoning)
 - **`oput`** = Claude Opus 4.8 + think (adaptive thinking)
+- **`fabt`** = Claude Fable 5 + think (deepest reasoning; premium — reserved for hard problems)
 - **`ULTRA`** = Run GEMT, GPTT, GROT, and OPUT in parallel (4 frontier models)
 - **`FUSE`** = Fusion: a frontier panel deliberates and a judge synthesizes, in one call
 
 These mnemonics make it easy to reference model+mode combinations in your queries.
+
+> **Note on Fable 5.** `anthropic/claude-fable-5` is Anthropic's most capable model but priced at a premium (~2× Opus 4.8). It **does not replace Opus 4.8** as the default Claude workhorse and is **not part of the `ULTRA` panel** — reach for it deliberately, only on specifically hard problems where the extra depth is worth the cost. Unlike Opus 4.8 (adaptive thinking only), OpenRouter honors Fable's effort scale, so `mid`/`think` map to `effort=high`/`effort=xhigh`.
 
 ## Featured: Fusion (multi-model analysis)
 
@@ -118,6 +121,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | `google/gemini-3.1-pro-preview` | 1M | **Flagship reasoning model** |
 | `google/gemini-3-flash-preview` | 1M | **Gemini 3 Flash, ultra fast** |
 | `google/gemini-3.1-flash-lite-preview` | 1M | Ultra-fast lite model |
+| `anthropic/claude-fable-5` | 1M | Most capable; **premium price — reserved for hard problems** |
 | `anthropic/claude-opus-4.8` | 1M | Best quality, adaptive thinking |
 | `anthropic/claude-sonnet-4.6` | 1M | Excellent reasoning, fast |
 | `anthropic/claude-haiku-4.5` | 200k | Budget, very fast |
@@ -131,8 +135,10 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 - `grot` = `x-ai/grok-4.20` + `think` (Grok 4.20, automatic reasoning)
 - `oput` = `anthropic/claude-opus-4.8` + `think` (Claude Opus, adaptive thinking)
 - `opuf` = `anthropic/claude-opus-4.8` + `fast` (Claude Opus, no reasoning)
+- `fabt` = `anthropic/claude-fable-5` + `think` (Claude Fable, deepest reasoning [effort xhigh]; premium, hard problems only)
+- `fabm` = `anthropic/claude-fable-5` + `mid` (Claude Fable, high-effort reasoning; premium)
 - `gemf` = `google/gemini-3-flash-preview` + `fast` (Gemini 3 Flash, ultra fast)
-- `ULTRA` = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight)
+- `ULTRA` = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight; Fable is deliberately **not** in the panel)
 - `FUSE` = `openrouter/fusion` (one call: a frontier panel deliberates, a judge synthesizes; mode sets web-research depth)
 
 You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the [full model list](https://openrouter.ai/models). File size limits are automatically calculated based on each model's context window.
@@ -222,6 +228,10 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.8.0
+- **Added Claude Fable 5** (`anthropic/claude-fable-5`) — Anthropic's most capable model, 1M context. Premium price (~2× Opus 4.8), so it's **reserved for specifically hard problems** and is **not** part of the `ULTRA` panel; it does not replace Opus 4.8 as the default Claude model. New mnemonics `fabt` (think) / `fabm` (mid). Unlike Opus 4.8 (adaptive thinking only), OpenRouter honors Fable's effort scale, so `mid`/`think` map to `effort=high`/`effort=xhigh` (`max` intentionally not exposed — it tends to overthink at ~2× token cost). ZDR not supported (Fable requires 30-day retention).
+- **Response-length prompt tuned:** the system prompt now asks the model to match answer length to the task (thorough when the question needs depth, concise otherwise) instead of a blunt "be concise".
 
 ### v3.7.1
 - Surface mid-stream API errors: when OpenRouter sends an error as a streaming data chunk (after the initial 200), the call now returns that error message instead of a misleading "No content received".

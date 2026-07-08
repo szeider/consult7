@@ -10,6 +10,7 @@ class ToolDescriptions:
             '"google/gemini-3.1-pro-preview" (Gemini 3.1 Pro, 1M context, flagship reasoning)',
             '"google/gemini-3-flash-preview" (Gemini 3 Flash, 1M context, fast)',
             '"google/gemini-3.1-flash-lite-preview" (Gemini 3.1 Flash Lite, 1M context, ultra fast)',
+            '"anthropic/claude-fable-5" (Claude Fable 5, 1M context, most capable — premium price, for hard problems)',
             '"anthropic/claude-opus-4.8" (Claude Opus 4.8, 1M context, adaptive thinking)',
             '"anthropic/claude-sonnet-4.6" (Claude Sonnet 4.6, 1M context)',
             '"anthropic/claude-haiku-4.5" (Claude Haiku 4.5, 200k context, budget)',
@@ -39,6 +40,8 @@ Quick mnemonics:
 - grot = x-ai/grok-4.20 + think (Grok 4.20, deep reasoning)
 - oput = anthropic/claude-opus-4.8 + think (Claude Opus, adaptive thinking)
 - opuf = anthropic/claude-opus-4.8 + fast (Claude Opus, no reasoning)
+- fabt = anthropic/claude-fable-5 + think (Claude Fable, deepest reasoning [effort xhigh]; premium, hard problems only)
+- fabm = anthropic/claude-fable-5 + mid (Claude Fable, high-effort reasoning; premium)
 - gemf = google/gemini-3-flash-preview + fast (Gemini 3 Flash, ultra fast)
 - ULTRA = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight)
 - FUSE = openrouter/fusion (one call: a frontier panel deliberates, a judge synthesizes; mode sets web-research depth). 128K context cap — for hard questions, not giant bundles
@@ -92,7 +95,7 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
             "Optional: Enable Zero Data Retention. When true, routes only to endpoints "
             "with ZDR policy (prompts not retained by provider). Default: false. "
             "ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.8, GPT-5, GPT-5.5. "
-            "Not available: Grok 4.20"
+            "Not available: Grok 4.20, Claude Fable 5 (requires 30-day retention)"
         )
 
     @classmethod

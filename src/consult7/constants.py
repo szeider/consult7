@@ -43,7 +43,7 @@ DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
 LLM_CALL_TIMEOUT = OPENROUTER_TIMEOUT + 120.0  # backstop only (~32 minutes)
 
 # Application constants
-SERVER_VERSION = "3.7.2"
+SERVER_VERSION = "3.8.0"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 MIN_ARGS = 1

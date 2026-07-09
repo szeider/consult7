@@ -49,7 +49,7 @@ Consult7 supports **Google's Gemini 3.1** family:
 **Quick mnemonics for power users:**
 - **`gemt`** = Gemini 3.1 Pro + think (flagship reasoning)
 - **`gemf`** = Gemini 3 Flash + fast (ultra fast)
-- **`gptt`** = GPT-5.5 + think (latest GPT)
+- **`gptt`** = GPT-5.6 Sol + think (latest GPT)
 - **`grot`** = Grok 4.20 + think (automatic reasoning)
 - **`oput`** = Claude Opus 4.8 + think (adaptive thinking)
 - **`fabt`** = Claude Fable 5 + think (deepest reasoning; premium — reserved for hard problems)
@@ -117,7 +117,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 
 | Model | Context | Use Case |
 |-------|---------|----------|
-| `openai/gpt-5.5` | 1M | Latest GPT, balanced performance |
+| `openai/gpt-5.6-sol` | 1M | Latest top-tier GPT, effort-based reasoning |
 | `google/gemini-3.1-pro-preview` | 1M | **Flagship reasoning model** |
 | `google/gemini-3-flash-preview` | 1M | **Gemini 3 Flash, ultra fast** |
 | `google/gemini-3.1-flash-lite-preview` | 1M | Ultra-fast lite model |
@@ -130,7 +130,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | `openrouter/fusion` | 128k | Multi-model panel + judge (see Featured: Fusion) |
 
 **Quick mnemonics:**
-- `gptt` = `openai/gpt-5.5` + `think` (latest GPT, deep reasoning)
+- `gptt` = `openai/gpt-5.6-sol` + `think` (latest GPT, deep reasoning)
 - `gemt` = `google/gemini-3.1-pro-preview` + `think` (Gemini 3.1 Pro, flagship reasoning)
 - `grot` = `x-ai/grok-4.20` + `think` (Grok 4.20, automatic reasoning)
 - `oput` = `anthropic/claude-opus-4.8` + `think` (Claude Opus, adaptive thinking)
@@ -163,7 +163,7 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 **Automatically ignored:** `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`
 
-**Size limits:** Dynamic based on model context window (e.g., Grok 4.20: ~8MB, GPT-5.5: ~4MB)
+**Size limits:** Dynamic based on model context window (e.g., Grok 4.20: ~8MB, GPT-5.6 Sol: ~4MB)
 
 ## Tool Parameters
 
@@ -180,7 +180,7 @@ The consultation tool accepts the following parameters:
 - **zdr** (optional): Enable Zero Data Retention routing (default: `false`)
   - When `true`, routes only to endpoints with ZDR policy (prompts not retained by provider)
   - ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.8, GPT-5, GPT-5.5
-  - Not available: Grok 4.20 (returns error)
+  - Not available: GPT-5.6 Sol, Grok 4.20, Claude Fable 5 (returns error)
 
 ## Usage Examples
 
@@ -228,6 +228,10 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.9.0
+- **New default GPT: GPT-5.6 Sol** (`openai/gpt-5.6-sol`) — the latest top-tier GPT, ~1M context / 128K output, effort-based reasoning (`mid` → `effort=medium`, `think` → `effort=high`). Replaces GPT-5.5 as the `gptt` default; GPT-5.5 stays available as a legacy model. ZDR is **not** supported on GPT-5.6 Sol (GPT-5.5 still is).
+- **Grok 4.5 not added:** `x-ai/grok-4.5` is region-restricted on OpenRouter (returns a 403 "not available in your region") and could not be verified against the real API, so it was not integrated. Grok 4.20 remains the `grot` default.
 
 ### v3.8.0
 - **Added Claude Fable 5** (`anthropic/claude-fable-5`) — Anthropic's most capable model, 1M context. Premium price (~2× Opus 4.8), so it's **reserved for specifically hard problems** and is **not** part of the `ULTRA` panel; it does not replace Opus 4.8 as the default Claude model. New mnemonics `fabt` (think) / `fabm` (mid). Unlike Opus 4.8 (adaptive thinking only), OpenRouter honors Fable's effort scale, so `mid`/`think` map to `effort=high`/`effort=xhigh` (`max` intentionally not exposed — it tends to overthink at ~2× token cost). ZDR not supported (Fable requires 30-day retention).

@@ -411,7 +411,7 @@ class OpenRouterProvider(BaseProvider):
                     f"\n\n[TRUNCATED — output incomplete. Exceeded the "
                     f"{OPENROUTER_TIMEOUT:.0f}s (~{budget_mins:.0f} min) wall-clock cap; "
                     f"the text above is what streamed before the cap. For FUSION, retry with "
-                    f"a single model (e.g. openai/gpt-5.5, google/gemini-3.1-pro-preview) "
+                    f"a single model (e.g. openai/gpt-5.6-sol, google/gemini-3.1-pro-preview) "
                     f"or split the question.]"
                 )
                 return (process_llm_response(full_response) + marker, None, budget_return, cost)

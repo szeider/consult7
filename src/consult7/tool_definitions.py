@@ -6,7 +6,7 @@ class ToolDescriptions:
 
     MODEL_EXAMPLES = {
         "openrouter": [
-            '"openai/gpt-5.5" (GPT-5.5, 1M context)',
+            '"openai/gpt-5.6-sol" (GPT-5.6 Sol, 1M context, top-tier GPT)',
             '"google/gemini-3.1-pro-preview" (Gemini 3.1 Pro, 1M context, flagship reasoning)',
             '"google/gemini-3-flash-preview" (Gemini 3 Flash, 1M context, fast)',
             '"google/gemini-3.1-flash-lite-preview" (Gemini 3.1 Flash Lite, 1M context, ultra fast)',
@@ -35,7 +35,7 @@ TIPS:
 - WARNING: a query that is BOTH long AND densely packed with special/math characters (< > | & =, parens, LaTeX) can make the call fail with a misleading "'model' is a required property" error (trailing fields dropped). Put bulk/symbolic detail in a file and keep query short and prose-only.
 
 Quick mnemonics:
-- gptt = openai/gpt-5.5 + think (latest GPT, deep reasoning)
+- gptt = openai/gpt-5.6-sol + think (latest GPT, deep reasoning)
 - gemt = google/gemini-3.1-pro-preview + think (Gemini 3.1 Pro, flagship reasoning)
 - grot = x-ai/grok-4.20 + think (Grok 4.20, deep reasoning)
 - oput = anthropic/claude-opus-4.8 + think (Claude Opus, adaptive thinking)
@@ -95,7 +95,7 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
             "Optional: Enable Zero Data Retention. When true, routes only to endpoints "
             "with ZDR policy (prompts not retained by provider). Default: false. "
             "ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.8, GPT-5, GPT-5.5. "
-            "Not available: Grok 4.20, Claude Fable 5 (requires 30-day retention)"
+            "Not available: GPT-5.6 Sol, Grok 4.20, Claude Fable 5 (requires 30-day retention)"
         )
 
     @classmethod
@@ -106,9 +106,9 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
             "- fast: No reasoning, fastest\n"
             "- mid: Moderate reasoning\n"
             "- think: Maximum reasoning for deepest analysis\n\n"
-            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT-5.5). "
+            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT-5.6). "
             "For FUSION this won't help (the cost is the panel of models, not reasoning "
-            "depth) — instead retry with a single model (e.g. openai/gpt-5.5, "
+            "depth) — instead retry with a single model (e.g. openai/gpt-5.6-sol, "
             "google/gemini-3.1-pro-preview) or split the question. On timeout consult7 "
             "returns the partial output with a [TRUNCATED] marker rather than discarding it."
         )

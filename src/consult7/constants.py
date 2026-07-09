@@ -43,7 +43,7 @@ DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
 LLM_CALL_TIMEOUT = OPENROUTER_TIMEOUT + 120.0  # backstop only (~32 minutes)
 
 # Application constants
-SERVER_VERSION = "3.8.0"
+SERVER_VERSION = "3.9.0"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 MIN_ARGS = 1
@@ -55,5 +55,5 @@ SMALL_MODEL_THRESHOLD = 100_000  # Context size threshold for small models
 
 # Test model for OpenRouter
 TEST_MODELS = {
-    "openrouter": "openai/gpt-5.5",
+    "openrouter": "openai/gpt-5.6-sol",
 }

@@ -42,7 +42,10 @@ MIN_REASONING_BUDGET = 25_000
 # Thinking/Reasoning Token Limits by Model - Officially Supported Models Only
 THINKING_LIMITS = {
     # OpenAI models - use effort-based reasoning (not token counts)
-    "openai/gpt-5.5": "effort",
+    # GPT-5.6 Sol: OpenRouter honors the effort scale (verified low/med/high/xhigh all 200,
+    # reasoning tokens scale 457/516/942 on a hard prompt) — same shape as gpt-5.5.
+    "openai/gpt-5.6-sol": "effort",
+    "openai/gpt-5.5": "effort",  # legacy
     "openai/gpt-5.4": "effort",  # legacy
     "openai/gpt-5.2": "effort",  # legacy
     # Google Gemini 3.1 models - use reasoning.enabled=true
@@ -79,7 +82,8 @@ THINKING_LIMITS = {
 # How each model handles reasoning token allocation
 MODEL_REASONING_BEHAVIOR = {
     # OpenAI: reasoning consumes max_tokens, effort-based (can use 50k+ tokens)
-    "openai/gpt-5.5": REASONING_FROM_OUTPUT,
+    "openai/gpt-5.6-sol": REASONING_FROM_OUTPUT,
+    "openai/gpt-5.5": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.4": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.2": REASONING_FROM_OUTPUT,  # legacy
     # Anthropic: reasoning consumes max_tokens
@@ -109,7 +113,8 @@ MODEL_REASONING_BEHAVIOR = {
 # Max output tokens by model (from OpenRouter API)
 MODEL_MAX_OUTPUT = {
     "anthropic/claude-fable-5": 128_000,
-    "openai/gpt-5.5": 128_000,
+    "openai/gpt-5.6-sol": 128_000,
+    "openai/gpt-5.5": 128_000,  # legacy
     "openai/gpt-5.4": 128_000,  # legacy
     "openai/gpt-5.2": 128_000,  # legacy
     "anthropic/claude-opus-4.8": 128_000,

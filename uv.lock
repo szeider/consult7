@@ -155,7 +155,7 @@ wheels = [
 
 [[package]]
 name = "consult7"
-version = "3.9.0"
+version = "3.9.1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -171,7 +171,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "mcp", specifier = ">=1.27.0" },
+    { name = "mcp", specifier = ">=1.27.0,<2" },
 ]
 
 [package.metadata.requires-dev]

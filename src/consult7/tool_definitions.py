@@ -14,7 +14,8 @@ class ToolDescriptions:
             '"anthropic/claude-opus-4.8" (Claude Opus 4.8, 1M context, adaptive thinking)',
             '"anthropic/claude-sonnet-4.6" (Claude Sonnet 4.6, 1M context)',
             '"anthropic/claude-haiku-4.5" (Claude Haiku 4.5, 200k context, budget)',
-            '"x-ai/grok-4.20" (Grok 4.20, 2M context)',
+            '"x-ai/grok-4.6" (Grok 4.6, 500K context, frontier Grok)',
+            '"x-ai/grok-4.20" (Grok 4.20, 2M context, for giant bundles)',
             '"x-ai/grok-4.1-fast" (Grok 4.1 Fast, 2M context)',
             '"openrouter/fusion" (Fusion: multi-model panel + judge, 128K context; mode = research depth)',
         ],
@@ -37,7 +38,7 @@ TIPS:
 Quick mnemonics:
 - gptt = openai/gpt-5.6-sol + think (latest GPT, deep reasoning)
 - gemt = google/gemini-3.1-pro-preview + think (Gemini 3.1 Pro, flagship reasoning)
-- grot = x-ai/grok-4.20 + think (Grok 4.20, deep reasoning)
+- grot = x-ai/grok-4.6 + think (Grok 4.6, deep reasoning [effort xhigh]; 500K context — for bigger bundles use x-ai/grok-4.20 [2M context] instead)
 - oput = anthropic/claude-opus-4.8 + think (Claude Opus, adaptive thinking)
 - opuf = anthropic/claude-opus-4.8 + fast (Claude Opus, no reasoning)
 - fabt = anthropic/claude-fable-5 + think (Claude Fable, deepest reasoning [effort xhigh]; premium, hard problems only)
@@ -94,7 +95,7 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
         return (
             "Optional: Enable Zero Data Retention. When true, routes only to endpoints "
             "with ZDR policy (prompts not retained by provider). Default: false. "
-            "ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.8, GPT-5, GPT-5.5. "
+            "ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.8, GPT-5, GPT-5.5, Grok 4.6. "
             "Not available: GPT-5.6 Sol, Grok 4.20, Claude Fable 5 (requires 30-day retention)"
         )
 

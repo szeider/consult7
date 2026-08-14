@@ -72,8 +72,12 @@ THINKING_LIMITS = {
     "anthropic/claude-sonnet-4.5": 31_999,
     "anthropic/claude-opus-4.5": 31_999,
     # X-AI Grok models
+    # Grok 4.6: effort honored coarsely (verified low/med/high/xhigh all 200; reasoning
+    # tokens 350/412/612/611 on a light prompt, flat on hard ones — adaptive baseline
+    # like Fable) — reuse the effort_fable profile (mid=high, think=xhigh, from_output).
+    "x-ai/grok-4.6": "effort_fable",
     # Grok 4.20: base model accepts reasoning.enabled only, no effort/max_tokens — use "toggle"
-    "x-ai/grok-4.20": "toggle",
+    "x-ai/grok-4.20": "toggle",  # legacy (kept: 2M context vs 4.6's 500K)
     "x-ai/grok-4": 32_000,  # legacy
     "x-ai/grok-4.1-fast": 32_000,
     "x-ai/grok-4-fast": 32_000,  # legacy
@@ -104,7 +108,8 @@ MODEL_REASONING_BEHAVIOR = {
     "google/gemini-3-pro-preview": REASONING_DYNAMIC,  # legacy
     "google/gemini-3-flash-preview": REASONING_DYNAMIC,  # legacy
     # Grok: reasoning from output
-    "x-ai/grok-4.20": REASONING_FROM_OUTPUT,
+    "x-ai/grok-4.6": REASONING_FROM_OUTPUT,
+    "x-ai/grok-4.20": REASONING_FROM_OUTPUT,  # legacy
     "x-ai/grok-4": REASONING_FROM_OUTPUT,  # legacy
     "x-ai/grok-4.1-fast": REASONING_FROM_OUTPUT,
     "x-ai/grok-4-fast": REASONING_FROM_OUTPUT,  # legacy
@@ -130,6 +135,7 @@ MODEL_MAX_OUTPUT = {
     "google/gemini-3-flash-preview": 65_536,  # legacy
     "google/gemini-2.5-pro": 65_536,
     "google/gemini-2.5-flash": 65_536,
+    "x-ai/grok-4.6": 128_000,  # OpenRouter API reports null; 128k is a safe practical ceiling
     "x-ai/grok-4.20": 128_000,  # OpenRouter API reports null; 128k is a safe practical ceiling
     "x-ai/grok-4": 131_072,  # legacy
     "x-ai/grok-4.1-fast": 131_072,
@@ -171,7 +177,7 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
         # Opus 4.8 / Grok 4.20: adaptive reasoning, use dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value in ("effort_fable_high", "effort_fable_xhigh"):
-        # Fable 5: effort honored; reasoning consumes output budget — use dynamic ratio
+        # Fable 5 / Grok 4.6: effort honored; reasoning consumes output budget — use dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value is not None:
         thinking_budget = thinking_budget_value
@@ -247,9 +253,9 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
         # Return different markers for mid vs think
         return "enabled_low" if mode == "mid" else "enabled_high"
 
-    # Claude Fable 5: OpenRouter honors the native effort scale. Two tiers kept in
-    # Anthropic's productive band (mid=high, think=xhigh); max is reserved to avoid
-    # overthinking and the ~2x reasoning-token cost on this premium model.
+    # Fable 5 / Grok 4.6: OpenRouter honors the native effort scale. Two tiers in
+    # the productive band (mid=high, think=xhigh); higher levels reserved to avoid
+    # overthinking and extra reasoning-token cost.
     if limit == "effort_fable":
         return "effort_fable_high" if mode == "mid" else "effort_fable_xhigh"
 
@@ -327,8 +333,8 @@ def calculate_reasoning_max_tokens(
         return int(model_max * DYNAMIC_REASONING_RATIO)
 
     elif thinking_budget in ("effort_fable_high", "effort_fable_xhigh"):
-        # Fable 5: effort honored; reasoning counts toward max_tokens. Give generous
-        # headroom (Fable can be verbose at higher effort) — 50% of the 128k ceiling.
+        # Fable 5 / Grok 4.6: effort honored; reasoning counts toward max_tokens. Give
+        # generous headroom (verbose at higher effort) — 50% of the 128k ceiling.
         return int(model_max * DYNAMIC_REASONING_RATIO)
 
     elif isinstance(thinking_budget, int):

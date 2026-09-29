@@ -6,15 +6,15 @@ class ToolDescriptions:
 
     MODEL_EXAMPLES = {
         "openrouter": [
-            '"openai/gpt-5.6-sol" (GPT-5.6 Sol, 1M context, top-tier GPT)',
+            '"openai/gpt-6-astra" (GPT-6 Astra, 1M context, top-tier GPT — premium price)',
             '"google/gemini-3.1-pro-preview" (Gemini 3.1 Pro, 1M context, flagship reasoning)',
             '"google/gemini-3-flash-preview" (Gemini 3 Flash, 1M context, fast)',
             '"google/gemini-3.1-flash-lite-preview" (Gemini 3.1 Flash Lite, 1M context, ultra fast)',
-            '"anthropic/claude-fable-5" (Claude Fable 5, 1M context, most capable — premium price, for hard problems)',
+            '"anthropic/claude-fable-5.1" (Claude Fable 5.1, 1M context, most capable — premium price, for hard problems)',
             '"anthropic/claude-opus-4.8" (Claude Opus 4.8, 1M context, adaptive thinking)',
             '"anthropic/claude-sonnet-4.6" (Claude Sonnet 4.6, 1M context)',
             '"anthropic/claude-haiku-4.5" (Claude Haiku 4.5, 200k context, budget)',
-            '"x-ai/grok-4.6" (Grok 4.6, 500K context, frontier Grok)',
+            '"x-ai/grok-4.7" (Grok 4.7, 500K context, frontier Grok)',
             '"x-ai/grok-4.20" (Grok 4.20, 2M context, for giant bundles)',
             '"x-ai/grok-4.1-fast" (Grok 4.1 Fast, 2M context)',
             '"openrouter/fusion" (Fusion: multi-model panel + judge, 128K context; mode = research depth)',
@@ -36,15 +36,15 @@ TIPS:
 - WARNING: a query that is BOTH long AND densely packed with special/math characters (< > | & =, parens, LaTeX) can make the call fail with a misleading "'model' is a required property" error (trailing fields dropped). Put bulk/symbolic detail in a file and keep query short and prose-only.
 
 Quick mnemonics:
-- gptt = openai/gpt-5.6-sol + think (latest GPT, deep reasoning)
+- gptt = openai/gpt-6-astra + think (latest GPT, deep reasoning [effort xhigh]; premium)
 - gemt = google/gemini-3.1-pro-preview + think (Gemini 3.1 Pro, flagship reasoning)
-- grot = x-ai/grok-4.6 + think (Grok 4.6, deep reasoning [effort xhigh]; 500K context — for bigger bundles use x-ai/grok-4.20 [2M context] instead)
+- grot = x-ai/grok-4.7 + think (Grok 4.7, deep reasoning [effort xhigh]; 500K context — for bigger bundles use x-ai/grok-4.20 [2M context] instead)
 - oput = anthropic/claude-opus-4.8 + think (Claude Opus, adaptive thinking)
 - opuf = anthropic/claude-opus-4.8 + fast (Claude Opus, no reasoning)
-- fabt = anthropic/claude-fable-5 + think (Claude Fable, deepest reasoning [effort xhigh]; premium, hard problems only)
-- fabm = anthropic/claude-fable-5 + mid (Claude Fable, high-effort reasoning; premium)
+- fabt = anthropic/claude-fable-5.1 + think (Claude Fable, deepest reasoning [effort xhigh]; premium, hard problems only)
+- fabm = anthropic/claude-fable-5.1 + mid (Claude Fable, high-effort reasoning; premium)
 - gemf = google/gemini-3-flash-preview + fast (Gemini 3 Flash, ultra fast)
-- ULTRA = call GEMT, GPTT, GROT, and OPUT IN PARALLEL (4 frontier models for maximum insight)
+- ULTRA = call GPTT, GROT, and FABT IN PARALLEL (3 frontier models for maximum insight)
 - FUSE = openrouter/fusion (one call: a frontier panel deliberates, a judge synthesizes; mode sets web-research depth). 128K context cap — for hard questions, not giant bundles
 
 {provider_notes}
@@ -95,8 +95,10 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
         return (
             "Optional: Enable Zero Data Retention. When true, routes only to endpoints "
             "with ZDR policy (prompts not retained by provider). Default: false. "
-            "ZDR available: Gemini 3.1 Pro/Flash, Claude Opus 4.8, GPT-5, GPT-5.5, Grok 4.6. "
-            "Not available: GPT-5.6 Sol, Grok 4.20, Claude Fable 5 (requires 30-day retention)"
+            "ZDR available: GPT-6 Astra, Grok 4.7, Gemini 3.1 Pro/Flash, Claude Opus 4.8, "
+            "GPT-5, GPT-5.5, Grok 4.6. "
+            "Not available: Claude Fable 5.1 and 5 (require 30-day retention), GPT-5.6 Sol, "
+            "Grok 4.20"
         )
 
     @classmethod
@@ -107,9 +109,9 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
             "- fast: No reasoning, fastest\n"
             "- mid: Moderate reasoning\n"
             "- think: Maximum reasoning for deepest analysis\n\n"
-            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT-5.6). "
+            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT). "
             "For FUSION this won't help (the cost is the panel of models, not reasoning "
-            "depth) — instead retry with a single model (e.g. openai/gpt-5.6-sol, "
+            "depth) — instead retry with a single model (e.g. openai/gpt-6-astra, "
             "google/gemini-3.1-pro-preview) or split the question. On timeout consult7 "
             "returns the partial output with a [TRUNCATED] marker rather than discarding it."
         )

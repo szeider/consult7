@@ -261,8 +261,8 @@ class OpenRouterProvider(BaseProvider):
                 # reasoning.effort and reasoning.max_tokens are ignored/unsupported
                 data["reasoning"] = {"enabled": True}
             elif uses_effort_fable:
-                # Claude Fable 5 / Grok 4.6: OpenRouter honors the native effort scale
-                # (unlike Opus 4.8 / Grok 4.20, which are toggle-only). Two tiers in the
+                # Fable 5.x / Grok 4.6+ / GPT-6 Astra: OpenRouter honors the native effort
+                # scale (unlike Opus 4.8 / Grok 4.20, which are toggle-only). Two tiers in the
                 # productive band; higher levels reserved (overthinking + extra cost).
                 effort_level = "high" if thinking_budget == "effort_fable_high" else "xhigh"
                 data["reasoning"] = {"effort": effort_level}
@@ -273,8 +273,8 @@ class OpenRouterProvider(BaseProvider):
         # Reasoning-budget value to report back, computed once so the normal and
         # timeout-partial return paths agree (markers: -1/-2 OpenAI effort high/med,
         # -3/-4 Gemini 3 effort high/low, -5 Opus 4.8 / Grok 4.20 adaptive enabled,
-        # -6/-7 Fable 5 / Grok 4.6 effort high/xhigh; an int for token-based reasoning;
-        # None when not in thinking mode).
+        # -6/-7 effort_fable (Fable 5.x / Grok 4.6+ / GPT-6 Astra) effort high/xhigh;
+        # an int for token-based reasoning; None when not in thinking mode).
         if thinking_mode and uses_effort_reasoning:
             budget_return = -1 if thinking_budget == "effort_high" else -2
         elif thinking_mode and uses_enabled_reasoning:
@@ -411,7 +411,7 @@ class OpenRouterProvider(BaseProvider):
                     f"\n\n[TRUNCATED — output incomplete. Exceeded the "
                     f"{OPENROUTER_TIMEOUT:.0f}s (~{budget_mins:.0f} min) wall-clock cap; "
                     f"the text above is what streamed before the cap. For FUSION, retry with "
-                    f"a single model (e.g. openai/gpt-5.6-sol, google/gemini-3.1-pro-preview) "
+                    f"a single model (e.g. openai/gpt-6-astra, google/gemini-3.1-pro-preview) "
                     f"or split the question.]"
                 )
                 return (process_llm_response(full_response) + marker, None, budget_return, cost)

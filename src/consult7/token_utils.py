@@ -42,9 +42,14 @@ MIN_REASONING_BUDGET = 25_000
 # Thinking/Reasoning Token Limits by Model - Officially Supported Models Only
 THINKING_LIMITS = {
     # OpenAI models - use effort-based reasoning (not token counts)
+    # GPT-6 Astra: reasoning is MANDATORY (default effort medium; bare ≈ medium in probes),
+    # so the GPT "effort" profile would make mid ≡ fast. Effort honored and monotone
+    # (verified low/medium/high/xhigh/max all 200; 33/45/72/105/160 reasoning tokens on a
+    # moderate prompt) — reuse the effort_fable profile: fast=default, mid=high, think=xhigh.
+    "openai/gpt-6-astra": "effort_fable",
     # GPT-5.6 Sol: OpenRouter honors the effort scale (verified low/med/high/xhigh all 200,
     # reasoning tokens scale 457/516/942 on a hard prompt) — same shape as gpt-5.5.
-    "openai/gpt-5.6-sol": "effort",
+    "openai/gpt-5.6-sol": "effort",  # legacy
     "openai/gpt-5.5": "effort",  # legacy
     "openai/gpt-5.4": "effort",  # legacy
     "openai/gpt-5.2": "effort",  # legacy
@@ -58,10 +63,14 @@ THINKING_LIMITS = {
     "google/gemini-2.5-pro": 32_768,
     "google/gemini-2.5-flash": 24_576,
     # Anthropic Claude models
+    # Fable 5.1: all five native efforts accepted; honored and monotone from high up
+    # (high/xhigh/max = 170/264/431 reasoning tokens); at low/medium/bare it usually skips
+    # thinking. Same effort_fable profile as Fable 5 (mid=high, think=xhigh, max unexposed).
+    "anthropic/claude-fable-5.1": "effort_fable",
     # Fable 5: OpenRouter DOES honor the native effort scale (verified: low/medium/high/
     # xhigh/max all accepted, unlike Opus 4.8 which is toggle-only). Two productive tiers —
     # max reserved (Anthropic + our token data: overthinking + ~2x reasoning tokens).
-    "anthropic/claude-fable-5": "effort_fable",
+    "anthropic/claude-fable-5": "effort_fable",  # legacy
     # Opus 4.8: adaptive thinking only, reasoning.max_tokens/effort ignored — use "toggle"
     "anthropic/claude-opus-4.8": "toggle",
     "anthropic/claude-opus-4.7": "toggle",  # legacy
@@ -72,10 +81,13 @@ THINKING_LIMITS = {
     "anthropic/claude-sonnet-4.5": 31_999,
     "anthropic/claude-opus-4.5": 31_999,
     # X-AI Grok models
+    # Grok 4.7: same shape as 4.6 — effort honored low→high (3.3K/4.8K/8.0K reasoning tokens
+    # on a moderate prompt), plateau at high/xhigh/max, mandatory reasoning (bare ≈ high).
+    "x-ai/grok-4.7": "effort_fable",
     # Grok 4.6: effort honored coarsely (verified low/med/high/xhigh all 200; reasoning
     # tokens 350/412/612/611 on a light prompt, flat on hard ones — adaptive baseline
     # like Fable) — reuse the effort_fable profile (mid=high, think=xhigh, from_output).
-    "x-ai/grok-4.6": "effort_fable",
+    "x-ai/grok-4.6": "effort_fable",  # legacy
     # Grok 4.20: base model accepts reasoning.enabled only, no effort/max_tokens — use "toggle"
     "x-ai/grok-4.20": "toggle",  # legacy (kept: 2M context vs 4.6's 500K)
     "x-ai/grok-4": 32_000,  # legacy
@@ -86,12 +98,14 @@ THINKING_LIMITS = {
 # How each model handles reasoning token allocation
 MODEL_REASONING_BEHAVIOR = {
     # OpenAI: reasoning consumes max_tokens, effort-based (can use 50k+ tokens)
-    "openai/gpt-5.6-sol": REASONING_FROM_OUTPUT,
+    "openai/gpt-6-astra": REASONING_FROM_OUTPUT,
+    "openai/gpt-5.6-sol": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.5": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.4": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.2": REASONING_FROM_OUTPUT,  # legacy
     # Anthropic: reasoning consumes max_tokens
-    "anthropic/claude-fable-5": REASONING_FROM_OUTPUT,
+    "anthropic/claude-fable-5.1": REASONING_FROM_OUTPUT,
+    "anthropic/claude-fable-5": REASONING_FROM_OUTPUT,  # legacy
     "anthropic/claude-opus-4.8": REASONING_FROM_OUTPUT,
     "anthropic/claude-opus-4.7": REASONING_FROM_OUTPUT,  # legacy
     "anthropic/claude-opus-4.6": REASONING_FROM_OUTPUT,  # legacy
@@ -108,7 +122,8 @@ MODEL_REASONING_BEHAVIOR = {
     "google/gemini-3-pro-preview": REASONING_DYNAMIC,  # legacy
     "google/gemini-3-flash-preview": REASONING_DYNAMIC,  # legacy
     # Grok: reasoning from output
-    "x-ai/grok-4.6": REASONING_FROM_OUTPUT,
+    "x-ai/grok-4.7": REASONING_FROM_OUTPUT,
+    "x-ai/grok-4.6": REASONING_FROM_OUTPUT,  # legacy
     "x-ai/grok-4.20": REASONING_FROM_OUTPUT,  # legacy
     "x-ai/grok-4": REASONING_FROM_OUTPUT,  # legacy
     "x-ai/grok-4.1-fast": REASONING_FROM_OUTPUT,
@@ -117,8 +132,10 @@ MODEL_REASONING_BEHAVIOR = {
 
 # Max output tokens by model (from OpenRouter API)
 MODEL_MAX_OUTPUT = {
-    "anthropic/claude-fable-5": 128_000,
-    "openai/gpt-5.6-sol": 128_000,
+    "anthropic/claude-fable-5.1": 128_000,
+    "anthropic/claude-fable-5": 128_000,  # legacy
+    "openai/gpt-6-astra": 128_000,
+    "openai/gpt-5.6-sol": 128_000,  # legacy
     "openai/gpt-5.5": 128_000,  # legacy
     "openai/gpt-5.4": 128_000,  # legacy
     "openai/gpt-5.2": 128_000,  # legacy
@@ -135,7 +152,11 @@ MODEL_MAX_OUTPUT = {
     "google/gemini-3-flash-preview": 65_536,  # legacy
     "google/gemini-2.5-pro": 65_536,
     "google/gemini-2.5-flash": 65_536,
-    "x-ai/grok-4.6": 128_000,  # OpenRouter API reports null; 128k is a safe practical ceiling
+    # Grok 4.7 / 4.6: OpenRouter lists 450k max output, but max_tokens also reserves context
+    # (openrouter.py: input room = context − max_tokens). 128k keeps the 50% reasoning
+    # headroom at 64k, leaving most of the 500k context for input.
+    "x-ai/grok-4.7": 128_000,
+    "x-ai/grok-4.6": 128_000,  # legacy
     "x-ai/grok-4.20": 128_000,  # OpenRouter API reports null; 128k is a safe practical ceiling
     "x-ai/grok-4": 131_072,  # legacy
     "x-ai/grok-4.1-fast": 131_072,
@@ -177,7 +198,8 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
         # Opus 4.8 / Grok 4.20: adaptive reasoning, use dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value in ("effort_fable_high", "effort_fable_xhigh"):
-        # Fable 5 / Grok 4.6: effort honored; reasoning consumes output budget — use dynamic ratio
+        # effort_fable (Fable 5.x / Grok 4.6+ / GPT-6 Astra): effort honored; reasoning
+        # consumes output budget — use dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value is not None:
         thinking_budget = thinking_budget_value
@@ -253,7 +275,7 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
         # Return different markers for mid vs think
         return "enabled_low" if mode == "mid" else "enabled_high"
 
-    # Fable 5 / Grok 4.6: OpenRouter honors the native effort scale. Two tiers in
+    # Fable 5.x / Grok 4.6+ / GPT-6 Astra: OpenRouter honors the native effort scale. Two tiers in
     # the productive band (mid=high, think=xhigh); higher levels reserved to avoid
     # overthinking and extra reasoning-token cost.
     if limit == "effort_fable":
@@ -333,8 +355,8 @@ def calculate_reasoning_max_tokens(
         return int(model_max * DYNAMIC_REASONING_RATIO)
 
     elif thinking_budget in ("effort_fable_high", "effort_fable_xhigh"):
-        # Fable 5 / Grok 4.6: effort honored; reasoning counts toward max_tokens. Give
-        # generous headroom (verbose at higher effort) — 50% of the 128k ceiling.
+        # Fable 5.x / Grok 4.6+ / GPT-6 Astra: effort honored; reasoning counts toward
+        # max_tokens. Give generous headroom (verbose at higher effort) — 50% of the 128k ceiling.
         return int(model_max * DYNAMIC_REASONING_RATIO)
 
     elif isinstance(thinking_budget, int):

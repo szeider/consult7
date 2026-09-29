@@ -57,12 +57,20 @@ def expand_file_patterns(file_patterns: List[str]) -> Tuple[List[Path], List[str
                     )
                     continue
 
-                # Use glob to expand
-                expanded = glob.glob(pattern)
-                for file_path in expanded:
-                    path_obj = Path(file_path)
-                    if path_obj.is_file() and not should_ignore_path(path_obj):
-                        matching_files.add(path_obj)
+                # Use glob to expand; a pattern that selects nothing is an error,
+                # not a silent query-only call
+                found = [Path(p) for p in glob.glob(pattern) if Path(p).is_file()]
+                kept = [p for p in found if not should_ignore_path(p)]
+                if not kept:
+                    skipped = len(found)
+                    note = (
+                        f" ({skipped} matching file{'s' if skipped != 1 else ''} on the ignore list)"
+                        if skipped
+                        else ""
+                    )
+                    errors.append(f"No files match pattern: {pattern}{note}")
+                    continue
+                matching_files.update(kept)
             else:
                 # Specific file path
                 path_obj = Path(pattern)
@@ -72,7 +80,12 @@ def expand_file_patterns(file_patterns: List[str]) -> Tuple[List[Path], List[str
                             f"Directory provided, must specify files: {pattern}\n"
                             f"  Hint: Use wildcards to select files (e.g., {pattern}/*.py)"
                         )
-                    elif not should_ignore_path(path_obj):
+                    elif should_ignore_path(path_obj):
+                        errors.append(
+                            f"File is on the ignore list and is never sent: {pattern}\n"
+                            f"  Ignored: {', '.join(DEFAULT_IGNORED)}"
+                        )
+                    else:
                         matching_files.add(path_obj)
                 else:
                     errors.append(
@@ -147,10 +160,15 @@ def format_content(
                 content_parts.append(
                     f"[ERROR: File too large ({file_size} bytes > {max_file_size} bytes)]"
                 )
-                errors.append(f"File too large: {file} ({file_size} bytes)")
+                errors.append(
+                    f"File too large: {file} ({file_size:,} bytes > {max_file_size:,} per file)"
+                )
             elif total_size + file_size > max_total_size:
                 content_parts.append("[ERROR: Total size limit exceeded]")
-                errors.append(f"Total size limit exceeded at file: {file}")
+                errors.append(
+                    f"Total size limit exceeded at file: {file} "
+                    f"({total_size + file_size:,} bytes so far > {max_total_size:,} total)"
+                )
                 break
             else:
                 # Read file content
@@ -167,14 +185,36 @@ def format_content(
 
         content_parts.append("")
 
-    # Add errors summary if any
-    if errors:
-        content_parts.append(FILE_SEPARATOR)
-        content_parts.append("Errors encountered:")
-        for error in errors:
-            content_parts.append(f"- {error}")
-
+    # Errors are not added to the prompt: the caller fails the call on any error
+    # before anything is sent, so the LLM never sees a partial bundle.
     return "\n".join(content_parts), total_size
+
+
+def validate_output_path(output_path: str) -> str:
+    """Check before the LLM call that output_path can be written.
+
+    Returns an error message, or an empty string if the path looks writable.
+    The parent directory may not exist yet (save creates it), so the nearest
+    existing ancestor must be a writable directory.
+    """
+    if not os.path.isabs(output_path):
+        return (
+            f"Output path must be absolute: {output_path}\n"
+            f"Hint: Use absolute paths like /Users/name/reports/output.md"
+        )
+
+    path_obj = Path(output_path)
+    if path_obj.is_dir():
+        return f"Output path is a directory, not a file: {output_path}"
+
+    ancestor = path_obj.parent
+    while not ancestor.exists():
+        ancestor = ancestor.parent
+    if not ancestor.is_dir():
+        return f"Cannot create {path_obj.parent}: {ancestor} is not a directory"
+    if not os.access(ancestor, os.W_OK):
+        return f"Permission denied: cannot write under {ancestor}"
+    return ""
 
 
 def save_output_to_file(content: str, output_path: str) -> Tuple[str, str]:

@@ -12,7 +12,7 @@ from mcp.server.lowlevel import NotificationOptions
 from .constants import SERVER_VERSION, EXIT_SUCCESS, EXIT_FAILURE, MIN_ARGS, TEST_MODELS
 from .tool_definitions import ToolDescriptions
 from .providers import PROVIDERS
-from .consultation import consultation_impl
+from .consultation import ConsultationError, consultation_impl
 
 # Set up consult7 logger
 logger = logging.getLogger("consult7")
@@ -20,6 +20,11 @@ logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stderr)
 handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
 logger.addHandler(handler)
+
+
+def error_result(text: str) -> types.CallToolResult:
+    """Wrap an error message so MCP clients see isError=true."""
+    return types.CallToolResult(content=[types.TextContent(type="text", text=text)], isError=True)
 
 
 class Consult7Server(Server):
@@ -131,8 +136,10 @@ async def main():
                             "type": "string",
                             "enum": ["fast", "mid", "think"],
                             "description": (
-                                "Performance mode: 'fast' (no reasoning, fastest), "
-                                "'mid' (moderate reasoning), 'think' (maximum reasoning)"
+                                "Performance mode: 'fast' (no reasoning requested, fastest; "
+                                "GPT-6 Astra, Grok 4.7 and Fable still reason at their own "
+                                "default level), 'mid' (moderate reasoning), "
+                                "'think' (maximum reasoning)"
                             ),
                         },
                         "output_file": {
@@ -150,8 +157,10 @@ async def main():
         ]
 
     @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-        """Handle tool calls."""
+    async def call_tool(
+        name: str, arguments: dict
+    ) -> list[types.TextContent] | types.CallToolResult:
+        """Handle tool calls. Failures are returned with isError=true."""
         try:
             if name == "consultation":
                 result = await consultation_impl(
@@ -166,7 +175,9 @@ async def main():
                 )
                 return [types.TextContent(type="text", text=result)]
             else:
-                return [types.TextContent(type="text", text=f"Error: Unknown tool '{name}'")]
+                return error_result(f"Error: Unknown tool '{name}'")
+        except ConsultationError as e:
+            return error_result(str(e))
         except Exception as e:
             # Log the full error for debugging
             logger.error(f"Error in {name}: {type(e).__name__}: {str(e)}")
@@ -187,7 +198,7 @@ async def main():
                 # Return the original error if no mapping
                 error_msg = str(e)
 
-            return [types.TextContent(type="text", text=f"Error: {error_msg}")]
+            return error_result(f"Error: {error_msg}")
 
     # Show model examples for the provider
     logger.info("Starting Consult7 MCP Server")

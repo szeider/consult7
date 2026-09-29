@@ -34,10 +34,10 @@
 ### Generate a report saved to file
 * **Files:** `["/Users/john/project/src/*.py", "/Users/john/project/tests/*.py"]`
 * **Query:** "Generate a comprehensive code review report with architecture analysis, code quality assessment, and improvement recommendations"
-* **Model:** `"google/gemini-2.5-pro"`
+* **Model:** `"google/gemini-3.1-pro-preview"`
 * **Mode:** `"think"`
 * **Output File:** `"/Users/john/reports/code_review.md"`
-* **Result:** Returns `"Result has been saved to /Users/john/reports/code_review.md"` instead of flooding the agent's context
+* **Result:** Returns `"Result has been saved to /Users/john/reports/code_review.md"` plus a one-line metadata footer, instead of flooding the agent's context
 
 ## Featured: Gemini 3.1 Models
 
@@ -58,7 +58,7 @@ Consult7 supports **Google's Gemini 3.1** family:
 
 These mnemonics make it easy to reference model+mode combinations in your queries.
 
-> **Note on Fable 5.1.** `anthropic/claude-fable-5.1` is Anthropic's most capable model but priced at a premium (~2× Opus 4.8). It **does not replace Opus 4.8** as the default Claude workhorse for single calls. Since v3.11.0 it holds the Anthropic seat in the `ULTRA` panel (which is meant for hard questions anyway). Unlike Opus 4.8 (adaptive thinking only), OpenRouter honors Fable's effort scale, so `mid`/`think` map to `effort=high`/`effort=xhigh`.
+> **Note on Fable 5.1.** `anthropic/claude-fable-5.1` is Anthropic's most capable model but priced at a premium (~2× Opus 4.8). It **does not replace Opus 4.8** as the everyday Claude choice for single calls. Since v3.11.0 it holds the Anthropic seat in the `ULTRA` panel (which is meant for hard questions anyway). Unlike Opus 4.8 (adaptive thinking only), OpenRouter honors Fable's effort scale, so `mid`/`think` map to `effort=high`/`effort=xhigh`.
 
 ## Featured: Fusion (multi-model analysis)
 
@@ -148,7 +148,7 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 ## Performance Modes
 
-- **`fast`**: No reasoning - quick answers, simple tasks
+- **`fast`**: No reasoning requested - quick answers, simple tasks. GPT-6 Astra, Grok 4.7 and Fable reason by design, so on them `fast` means their own default level (billed), shown in the footer as `reasoning: model default`
 - **`mid`**: Moderate reasoning - code reviews, bug analysis
 - **`think`**: Maximum reasoning - security audits, complex refactoring
 
@@ -164,7 +164,9 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 - Test files: `/path/to/tests/*_test.py` or `/path/to/tests/test_*.py`
 - Multiple extensions: `["/path/*.js", "/path/*.ts"]`
 
-**Automatically ignored:** `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`
+**Automatically ignored:** `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`. Wildcards skip them; naming one explicitly is an error.
+
+**Fail fast:** a relative or missing path, a directory, a wildcard that matches nothing, an explicitly named ignored file, or files over the model's size limit fail the whole call before anything is sent to the model (no cost). The error lists every problem, and for size problems the per-file and total limits.
 
 **Size limits:** Dynamic based on model context window (e.g., Grok 4.20: ~8MB, GPT-6 Astra: ~4MB)
 
@@ -177,8 +179,9 @@ The consultation tool accepts the following parameters:
 - **model** (required): The LLM model to use (see Supported Models above)
 - **mode** (required): Performance mode - `fast`, `mid`, or `think`
 - **output_file** (optional): Absolute path to save the response to a file instead of returning it
-  - If the file exists, it will be saved with `_updated` suffix (e.g., `report.md` → `report_updated.md`)
-  - When specified, returns only: `"Result has been saved to /path/to/file"`
+  - The path is checked before the model is called, so a bad path costs nothing
+  - If the file exists, it will be saved with `_updated` suffix (e.g., `report.md` → `report_updated.md`, then `report_updated_1.md`, ...)
+  - When specified, returns `"Result has been saved to /path/to/file"` plus the metadata footer
   - Useful for generating reports, documentation, or analyses without flooding the agent's context
 - **zdr** (optional): Enable Zero Data Retention routing (default: `false`)
   - When `true`, routes only to endpoints with ZDR policy (prompts not retained by provider)
@@ -232,9 +235,17 @@ claude mcp remove consult7 -s user
 
 ## Version History
 
+### v3.11.1
+- **Fail fast before any paid call.** A missing file in a list, a wildcard that matches nothing, an explicitly named ignored file (`.env`, `secrets.py`, ...), or files over the model's per-file or total size limit now fail the call with a clear error before anything is sent. Before, these were reported only inside the prompt (or dropped), and the paid call went through on partial input.
+- **`output_file` is checked before the call.** A relative or unwritable path fails at no cost. If saving still fails after the call, the response is returned instead of being lost.
+- **Errors set `isError=true`** in the MCP result, so clients and wrappers can detect failures without parsing text.
+- Upstream error messages no longer include the OpenRouter account `user_id`.
+- Footer: `1 file` (not `1 files`). On `fast`, models that always reason (GPT-6 Astra, Grok 4.7, Fable) show `reasoning: model default`.
+- Shorter tool description (under 2,000 characters, file rules first). Claude Code truncated the old one before the file rules.
+
 ### v3.11.0
 - **New ULTRA panel: GPTT + GROT + FABT** (3 models in parallel). Gemini 3.1 Pro leaves the panel (`gemt` and all Gemini models stay available); Opus 4.8 (`oput`/`opuf`) stays available but its ULTRA seat goes to Fable.
-- **`gptt` → GPT-6 Astra** (`openai/gpt-6-astra`, 1M context, $10/$50 per M) — also the new default model. Reasoning is mandatory on Astra, so `mid`/`think` now map to `effort=high`/`effort=xhigh` (GPT-5.6 Sol used `medium`/`high`). ZDR supported.
+- **`gptt` → GPT-6 Astra** (`openai/gpt-6-astra`, 1M context, $10/$50 per M) — also the model used by `consult7 <key> --test`. Reasoning is mandatory on Astra, so `mid`/`think` now map to `effort=high`/`effort=xhigh` (GPT-5.6 Sol used `medium`/`high`). ZDR supported.
 - **`grot` → Grok 4.7** (`x-ai/grok-4.7`, 500K context; grok 4.6 had been the default since v3.10.0). Same effort mapping (`high`/`xhigh`). ZDR supported.
 - **`fabt`/`fabm` → Claude Fable 5.1** (`anthropic/claude-fable-5.1`, 1M context). Same effort mapping. ZDR not supported.
 - Superseded IDs (`openai/gpt-5.6-sol`, `x-ai/grok-4.6`, `anthropic/claude-fable-5`) keep working with their previous settings.

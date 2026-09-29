@@ -29,6 +29,18 @@ from ..token_utils import (
 logger = logging.getLogger("consult7")
 
 
+def strip_account_id(body_text: str) -> str:
+    """Drop OpenRouter's account user_id from an error body before it reaches the caller."""
+    try:
+        body = json.loads(body_text)
+    except ValueError:
+        return body_text
+    if isinstance(body, dict) and "user_id" in body:
+        body.pop("user_id")
+        return json.dumps(body, ensure_ascii=False)
+    return body_text
+
+
 class OpenRouterProvider(BaseProvider):
     """OpenRouter provider implementation."""
 
@@ -307,7 +319,7 @@ class OpenRouterProvider(BaseProvider):
                     if response.status_code != 200:
                         # Read error response body
                         error_body = await response.aread()
-                        body_text = error_body.decode()
+                        body_text = strip_account_id(error_body.decode())
 
                         # Friendlier wrapper for ZDR no-endpoint failures
                         if (

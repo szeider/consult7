@@ -10,11 +10,32 @@ from .constants import (
     FUSION_MODEL,
     FUSION_MAX_TOOL_CALLS,
 )
-from .file_processor import expand_file_patterns, format_content, save_output_to_file
-from .token_utils import estimate_tokens, get_thinking_budget, calculate_max_file_size
+from .file_processor import (
+    expand_file_patterns,
+    format_content,
+    save_output_to_file,
+    validate_output_path,
+)
+from .token_utils import (
+    THINKING_LIMITS,
+    estimate_tokens,
+    get_thinking_budget,
+    calculate_max_file_size,
+)
 from .providers import PROVIDERS
 
 logger = logging.getLogger("consult7")
+
+NOTHING_SENT = "nothing was sent, no cost"
+
+
+class ConsultationError(Exception):
+    """A failed consultation. The server returns the message with isError=true."""
+
+
+def plural_files(count: int) -> str:
+    """Return "1 file" or "N files"."""
+    return f"{count} file" if count == 1 else f"{count} files"
 
 
 def format_cost(cost: Optional[float]) -> Optional[str]:
@@ -67,12 +88,21 @@ async def consultation_impl(
     output_file: Optional[str] = None,
     zdr: bool = False,
 ) -> str:
-    """Implementation of the consultation tool logic."""
-    # Expand file patterns
+    """Implementation of the consultation tool logic.
+
+    Returns the response text; raises ConsultationError on failure. Every input
+    problem is detected before the paid LLM call (fast fail, no partial bundles).
+    """
+    if output_file and (path_error := validate_output_path(output_file)):
+        raise ConsultationError(f"Error: invalid output_file ({NOTHING_SENT}): {path_error}")
+
+    # Expand file patterns; any bad, missing, ignored or unmatched entry fails the call
     file_paths, errors = expand_file_patterns(files)
 
-    if not file_paths and errors:
-        return "Error: No files found. Errors:\n" + "\n".join(errors)
+    if errors:
+        raise ConsultationError(
+            f"Error: invalid file list ({NOTHING_SENT}):\n- " + "\n- ".join(errors)
+        )
 
     # Get model info to calculate dynamic limits
     model_info = await get_model_context_info(model, provider, api_key)
@@ -89,10 +119,16 @@ async def consultation_impl(
         # Format content with model-specific limits
         content, total_size = format_content(file_paths, errors, max_total_size, max_file_size)
 
+        if errors:
+            raise ConsultationError(
+                f"Error: files do not fit {model} in {mode} mode ({NOTHING_SENT}):\n- "
+                + "\n- ".join(errors)
+                + f"\nLimits: {max_file_size:,} bytes per file, {max_total_size:,} bytes total. "
+                "Send fewer or smaller files, or use a larger-context model."
+            )
+
         # Add size info that will be part of the query
-        size_info = (
-            f"\n\n---\nTotal content size: {total_size:,} bytes from {len(file_paths)} files"
-        )
+        size_info = f"\n\n---\nTotal content size: {total_size:,} bytes from {plural_files(len(file_paths))}"
 
         # Estimate tokens for the full input
         full_content = content + size_info + f"\n\nQuery: {query}"
@@ -112,7 +148,7 @@ async def consultation_impl(
     thinking_budget = None
     provider_instance = PROVIDERS.get(provider)
     if not provider_instance:
-        return f"Error: Unknown provider '{provider}'"
+        raise ConsultationError(f"Error: Unknown provider '{provider}'")
 
     # Call the provider. The provider owns the real streaming budget
     # (OPENROUTER_TIMEOUT) and returns partial output on timeout; this outer
@@ -132,15 +168,19 @@ async def consultation_impl(
             )
     except asyncio.TimeoutError:
         backstop_mins = LLM_CALL_TIMEOUT / 60
-        return (
+        raise ConsultationError(
             f"Error: Request timed out after {LLM_CALL_TIMEOUT:.0f} seconds "
             f"(~{backstop_mins:.0f} minutes) at the outer backstop - "
             f"the model or API may be hanging.\n\n"
-            f"Collected {len(file_paths)} files ({total_size:,} bytes){token_info}"
+            f"Collected {plural_files(len(file_paths))} ({total_size:,} bytes){token_info}"
         )
 
     # Add reasoning budget info if applicable (even for errors)
-    if thinking_budget is not None:
+    if thinking_budget is None and mode == "fast" and THINKING_LIMITS.get(model) == "effort_fable":
+        # No reasoning param is sent, but these models reason by default (GPT-6 Astra
+        # medium, Grok 4.7 about high, Fable adaptive), and the reasoning tokens are billed
+        token_info += ", reasoning: model default (fast sends no effort; cannot be disabled)"
+    elif thinking_budget is not None:
         if thinking_budget == -1:
             # OpenAI effort=high
             token_info += ", reasoning: effort=high"
@@ -168,7 +208,7 @@ async def consultation_impl(
             token_info += ", reasoning: effort=xhigh"
         elif thinking_budget > 0:
             # Calculate percentage of maximum possible reasoning tokens
-            from .token_utils import THINKING_LIMITS, MAX_REASONING_TOKENS
+            from .token_utils import MAX_REASONING_TOKENS
 
             # Determine max reasoning based on model's limit in THINKING_LIMITS
             model_limit = THINKING_LIMITS.get(model)
@@ -197,14 +237,14 @@ async def consultation_impl(
         token_info += f", cost: {cost_str}"
 
     if error:
-        return (
+        raise ConsultationError(
             f"Error calling {provider} LLM: {error}\n\n"
-            f"Collected {len(file_paths)} files ({total_size:,} bytes){token_info}"
+            f"Collected {plural_files(len(file_paths))} ({total_size:,} bytes){token_info}"
         )
 
     mode_str = f" [{mode}]" if mode != "fast" else ""
     metadata_footer = (
-        f"Processed {len(file_paths)} files ({total_size:,} bytes) "
+        f"Processed {plural_files(len(file_paths))} ({total_size:,} bytes) "
         f"with {model}{mode_str} ({provider}){token_info}"
     )
 
@@ -214,7 +254,13 @@ async def consultation_impl(
         save_path, save_error = save_output_to_file(response, output_file)
 
         if save_error:
-            return f"Error saving output: {save_error}"
+            # The path was checked before the call, so this is rare (e.g. the
+            # directory changed meanwhile). Keep the paid-for answer.
+            raise ConsultationError(
+                f"Error saving output: {save_error}\n"
+                f"The response is returned below instead.\n\n"
+                f"{response}\n\n---\n{metadata_footer}"
+            )
 
         # Confirmation + metadata footer so the caller can see what actually ran
         return f"Result has been saved to {save_path}\n\n---\n{metadata_footer}"

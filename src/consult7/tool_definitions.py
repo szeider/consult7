@@ -26,32 +26,25 @@ class ToolDescriptions:
         """Get the main description for the consultation tool."""
         provider_notes = cls._get_provider_notes(provider)
 
-        return f"""Analyze files with an LLM - provide absolute file paths, query, model, and mode.
+        # Keep this under ~2,000 characters: Claude Code truncates longer tool
+        # descriptions, so the rules a caller needs most come first.
+        return f"""Analyze files with an LLM - provide absolute file paths, query, model, and mode. Stateless: every call must list complete absolute paths.
 
-STATELESS: Each call must contain complete absolute paths. No context is remembered.
-
-TIPS:
-- Hard questions: Spawn 3 parallel calls with varied query formulations
-- Long instructions: Put them in a file, include in files list, keep query short
-- WARNING: a query that is BOTH long AND densely packed with special/math characters (< > | & =, parens, LaTeX) can make the call fail with a misleading "'model' is a required property" error (trailing fields dropped). Put bulk/symbolic detail in a file and keep query short and prose-only.
-
-Quick mnemonics:
-- gptt = openai/gpt-6-astra + think (latest GPT, deep reasoning [effort xhigh]; premium)
-- gemt = google/gemini-3.1-pro-preview + think (Gemini 3.1 Pro, flagship reasoning)
-- grot = x-ai/grok-4.7 + think (Grok 4.7, deep reasoning [effort xhigh]; 500K context — for bigger bundles use x-ai/grok-4.20 [2M context] instead)
-- oput = anthropic/claude-opus-4.8 + think (Claude Opus, adaptive thinking)
-- opuf = anthropic/claude-opus-4.8 + fast (Claude Opus, no reasoning)
-- fabt = anthropic/claude-fable-5.1 + think (Claude Fable, deepest reasoning [effort xhigh]; premium, hard problems only)
-- fabm = anthropic/claude-fable-5.1 + mid (Claude Fable, high-effort reasoning; premium)
-- gemf = google/gemini-3-flash-preview + fast (Gemini 3 Flash, ultra fast)
-- ULTRA = call GPTT, GROT, and FABT IN PARALLEL (3 frontier models for maximum insight)
-- FUSE = openrouter/fusion (one call: a frontier panel deliberates, a judge synthesizes; mode sets web-research depth). 128K context cap — for hard questions, not giant bundles
+Files: absolute paths; wildcards only in filenames and with an extension (/path/*.py, not /path/*/x.py or /path/*). Never sent: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules (wildcards skip them; naming one is an error). A bad path, a wildcard with no match, or files over the model's size limit fail the call before anything is sent (no cost). files=[] means query only.
 
 {provider_notes}
 
-Files: Absolute paths, wildcards only in filenames (e.g., /path/*.py not /*/path/*.py)
-Ignores: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules
-Limits: Dynamic per model - each model optimized for its full context capacity"""
+Tips: for hard questions, spawn 3 parallel calls with varied formulations. Put long or symbol-heavy instructions in a file and keep the query short prose (see query).
+
+Mnemonics:
+- gptt = openai/gpt-6-astra + think (premium)
+- gemt = google/gemini-3.1-pro-preview + think
+- grot = x-ai/grok-4.7 + think (500K context, slow; bigger bundles: x-ai/grok-4.20, 2M)
+- oput / opuf = anthropic/claude-opus-4.8 + think / fast
+- fabt / fabm = anthropic/claude-fable-5.1 + think / mid (premium, hard problems)
+- gemf = google/gemini-3-flash-preview + fast
+- ULTRA = GPTT, GROT and FABT in parallel (3 calls in one message)
+- FUSE = openrouter/fusion (panel + judge in one call; mode sets web-research depth; 128K context)"""
 
     @classmethod
     def get_model_parameter_description(cls, provider: str) -> str:
@@ -68,7 +61,10 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
     @classmethod
     def get_files_description(cls) -> str:
         """Get the files parameter description."""
-        return 'Absolute file paths or patterns. Example: ["/path/src/*.py", "/path/README.md"]'
+        return (
+            'Absolute file paths or patterns. Example: ["/path/src/*.py", "/path/README.md"]. '
+            "Use [] for a query without files."
+        )
 
     @classmethod
     def get_query_description(cls) -> str:
@@ -85,7 +81,8 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
     def get_output_file_description(cls) -> str:
         """Get the output_file parameter description."""
         return (
-            "Optional: Save response to file (adds _updated suffix if exists). "
+            "Optional: absolute path to save the response to, checked before the call "
+            "(if the file exists, saves as name_updated.ext). "
             "Tip: For code files, prompt the LLM to return raw code without markdown formatting"
         )
 
@@ -105,13 +102,9 @@ Limits: Dynamic per model - each model optimized for its full context capacity""
     def _get_provider_notes(cls, provider: str) -> str:
         """Get provider-specific notes."""
         return (
-            "Performance Modes (use 'mode' parameter):\n"
-            "- fast: No reasoning, fastest\n"
-            "- mid: Moderate reasoning\n"
-            "- think: Maximum reasoning for deepest analysis\n\n"
-            "TIMEOUT TIP: If 'think' times out, retry with 'mid' (especially GPT). "
-            "For FUSION this won't help (the cost is the panel of models, not reasoning "
-            "depth) — instead retry with a single model (e.g. openai/gpt-6-astra, "
-            "google/gemini-3.1-pro-preview) or split the question. On timeout consult7 "
-            "returns the partial output with a [TRUNCATED] marker rather than discarding it."
+            "Modes: fast = no reasoning requested (GPT-6 Astra, Grok 4.7 and Fable still "
+            "reason at their default level); mid = moderate reasoning; think = maximum "
+            "reasoning. If think times out, retry with mid; for FUSE use a single model or "
+            "split the question instead. On timeout the partial output is returned with a "
+            "[TRUNCATED] marker."
         )

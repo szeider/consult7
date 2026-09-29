@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from typing import Optional
 
 from .constants import (
@@ -23,6 +24,7 @@ from .token_utils import (
     calculate_max_file_size,
 )
 from .providers import PROVIDERS
+from .providers.base import build_messages
 
 logger = logging.getLogger("consult7")
 
@@ -36,6 +38,19 @@ class ConsultationError(Exception):
 def plural_files(count: int) -> str:
     """Return "1 file" or "N files"."""
     return f"{count} file" if count == 1 else f"{count} files"
+
+
+def unlisted_model_note(model: str, model_info: dict) -> str:
+    """Explain an error for a model that OpenRouter's model list does not contain."""
+    if not model_info.get("unlisted"):
+        return ""
+    suggestions = model_info.get("suggestions") or []
+    hint = f" Closest listed IDs: {', '.join(suggestions)}." if suggestions else ""
+    return (
+        f"\nNote: {model} is not in OpenRouter's model list, so its context size is unknown "
+        f"({DEFAULT_CONTEXT_LENGTH:,} tokens assumed). Check the ID at "
+        f"https://openrouter.ai/models.{hint}"
+    )
 
 
 def format_cost(cost: Optional[float]) -> Optional[str]:
@@ -66,6 +81,14 @@ async def get_model_context_info(model_name: str, provider: str, api_key: Option
 
         if info and "context_length" in info:
             return info
+
+        if info and info.get("found") is False:
+            return {
+                "context_length": DEFAULT_CONTEXT_LENGTH,
+                "provider": provider,
+                "unlisted": True,
+                "suggestions": info.get("suggestions", []),
+            }
 
         # Fallback to default if no info available
         logger.warning(
@@ -114,32 +137,29 @@ async def consultation_impl(
 
     if file_paths:
         # Calculate dynamic file size limits based on model's context window
-        max_total_size, max_file_size = calculate_max_file_size(model_context_length, mode, model)
+        max_total_size = calculate_max_file_size(model_context_length, mode, model)
 
         # Format content with model-specific limits
-        content, total_size = format_content(file_paths, errors, max_total_size, max_file_size)
+        content, total_size = format_content(file_paths, errors, max_total_size)
 
         if errors:
             raise ConsultationError(
-                f"Error: files do not fit {model} in {mode} mode ({NOTHING_SENT}):\n- "
+                f"Error: cannot send these files to {model} in {mode} mode ({NOTHING_SENT}):\n- "
                 + "\n- ".join(errors)
-                + f"\nLimits: {max_file_size:,} bytes per file, {max_total_size:,} bytes total. "
-                "Send fewer or smaller files, or use a larger-context model."
+                + unlisted_model_note(model, model_info)
             )
 
         # Add size info that will be part of the query
         size_info = f"\n\n---\nTotal content size: {total_size:,} bytes from {plural_files(len(file_paths))}"
 
-        # Estimate tokens for the full input
-        full_content = content + size_info + f"\n\nQuery: {query}"
     else:
         # No files: query-only mode
         content = ""
         total_size = 0
         size_info = ""
-        full_content = query
 
-    estimated_tokens = estimate_tokens(full_content)
+    # Same message text the provider sends, so both token estimates agree
+    estimated_tokens = estimate_tokens("".join(build_messages(content + size_info, query)))
     token_info = f"\nEstimated tokens: ~{estimated_tokens:,}"
     if model_context_length:
         token_info += f" (Model limit: {model_context_length:,} tokens)"
@@ -154,6 +174,7 @@ async def consultation_impl(
     # (OPENROUTER_TIMEOUT) and returns partial output on timeout; this outer
     # asyncio.timeout is only a backstop for a hang *outside* the stream loop,
     # set strictly above the provider budget so the graceful path always wins.
+    start = time.monotonic()
     try:
         async with asyncio.timeout(LLM_CALL_TIMEOUT):
             response, error, thinking_budget, cost = await provider_instance.call_llm(
@@ -235,14 +256,16 @@ async def consultation_impl(
     # Report the call's USD cost (from OpenRouter usage accounting) when available
     if (cost_str := format_cost(cost)) is not None:
         token_info += f", cost: {cost_str}"
+    token_info += f", time: {time.monotonic() - start:.1f}s"
 
     if error:
         raise ConsultationError(
-            f"Error calling {provider} LLM: {error}\n\n"
+            f"Error calling {provider} LLM: {error}"
+            f"{unlisted_model_note(model, model_info)}\n\n"
             f"Collected {plural_files(len(file_paths))} ({total_size:,} bytes){token_info}"
         )
 
-    mode_str = f" [{mode}]" if mode != "fast" else ""
+    mode_str = f" [{mode}, zdr]" if zdr else f" [{mode}]"
     metadata_footer = (
         f"Processed {plural_files(len(file_paths))} ({total_size:,} bytes) "
         f"with {model}{mode_str} ({provider}){token_info}"

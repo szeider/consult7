@@ -1,7 +1,7 @@
 """Constants and static configuration for Consult7 MCP server."""
 
-# File size limits
-MAX_FILE_SIZE = 1_000_000  # 1MB per file (reasonable for source code files)
+# File size limits (the per-call budget comes from the model's context window;
+# this is only the default for format_content)
 MAX_TOTAL_SIZE = 4_000_000  # 4MB total (~1M tokens with 3.5 chars/token)
 MAX_RESPONSE_SIZE = 100_000  # 100KB response
 FILE_SEPARATOR = "-" * 80
@@ -43,7 +43,7 @@ DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
 LLM_CALL_TIMEOUT = OPENROUTER_TIMEOUT + 120.0  # backstop only (~32 minutes)
 
 # Application constants
-SERVER_VERSION = "3.11.1"
+SERVER_VERSION = "3.11.2"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 MIN_ARGS = 1

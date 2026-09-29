@@ -5,6 +5,19 @@ from typing import Optional, Tuple
 
 from ..constants import MAX_RESPONSE_SIZE
 
+SYSTEM_PROMPT = (
+    "You are a helpful assistant analyzing code and files. Be specific and precise. "
+    "Match the length of your answer to the task — thorough when the question needs "
+    "depth or breadth, short when it doesn't. Lead with the key finding; don't pad."
+)
+
+
+def build_messages(content: str, query: str) -> Tuple[str, str]:
+    """Return (system, user) message texts; also used for token estimates."""
+    if content:
+        return SYSTEM_PROMPT, f"Here are the files to analyze:\n\n{content}\n\nQuery: {query}"
+    return SYSTEM_PROMPT, query
+
 
 def process_llm_response(response_content: Optional[str]) -> str:
     """Normalize and truncate LLM response if needed.
@@ -33,8 +46,10 @@ class BaseProvider(ABC):
             api_key: API key for the provider
 
         Returns:
-            Dictionary with model information or None if not available
-            Expected keys: context_length, max_output_tokens, provider
+            Dictionary with model information, {"found": False, "suggestions": [...]}
+            when the model list was fetched but does not contain the model, or None
+            if the list is not available.
+            Expected keys when found: context_length, max_output_tokens, provider
         """
         pass
 

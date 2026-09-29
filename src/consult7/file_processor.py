@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Tuple, List
 
-from .constants import DEFAULT_IGNORED, MAX_FILE_SIZE, MAX_TOTAL_SIZE, FILE_SEPARATOR
+from .constants import DEFAULT_IGNORED, MAX_TOTAL_SIZE, FILE_SEPARATOR
 
 
 def should_ignore_path(path: Path) -> bool:
@@ -103,18 +103,17 @@ def format_content(
     files: List[Path],
     errors: List[str],
     max_total_size: int = MAX_TOTAL_SIZE,
-    max_file_size: int = MAX_FILE_SIZE,
 ) -> Tuple[str, int]:
     """Format files into text content.
 
     Args:
         files: List of file paths to format
-        errors: List to append errors to
+        errors: List to append errors to (binary, unreadable, over budget)
         max_total_size: Maximum total size in bytes (model-dependent)
-        max_file_size: Maximum per-file size in bytes (model-dependent)
 
     Returns:
-        Tuple of (content, total_size)
+        Tuple of (content, total_size). total_size counts every file, so an
+        over-budget error can report the full size of the request.
     """
     content_parts = []
     total_size = 0
@@ -149,44 +148,37 @@ def format_content(
     content_parts.append("File Contents:")
     content_parts.append(FILE_SEPARATOR)
 
-    for file in sorted_files:
-        content_parts.append(f"\nFile: {file}")
-        content_parts.append(FILE_SEPARATOR)
-
-        try:
-            # Check file size
-            file_size = file.stat().st_size
-            if file_size > max_file_size:
-                content_parts.append(
-                    f"[ERROR: File too large ({file_size} bytes > {max_file_size} bytes)]"
-                )
-                errors.append(
-                    f"File too large: {file} ({file_size:,} bytes > {max_file_size:,} per file)"
-                )
-            elif total_size + file_size > max_total_size:
-                content_parts.append("[ERROR: Total size limit exceeded]")
-                errors.append(
-                    f"Total size limit exceeded at file: {file} "
-                    f"({total_size + file_size:,} bytes so far > {max_total_size:,} total)"
-                )
-                break
-            else:
-                # Read file content
-                content = file.read_text(encoding="utf-8", errors="replace")
-                content_parts.append(content)
-                total_size += file_size
-
-        except PermissionError:
-            content_parts.append("[ERROR: Permission denied]")
-            errors.append(f"Permission denied reading file: {file}")
-        except Exception as e:
-            content_parts.append(f"[ERROR: {e}]")
-            errors.append(f"Error reading file {file}: {e}")
-
-        content_parts.append("")
-
     # Errors are not added to the prompt: the caller fails the call on any error
     # before anything is sent, so the LLM never sees a partial bundle.
+    for file in sorted_files:
+        try:
+            total_size += file.stat().st_size
+            if total_size > max_total_size:
+                continue  # over budget: keep summing sizes for the error, skip reading
+            data = file.read_bytes()
+        except PermissionError:
+            errors.append(f"Permission denied reading file: {file}")
+            continue
+        except Exception as e:
+            errors.append(f"Error reading file {file}: {e}")
+            continue
+
+        # Same heuristic as git: a NUL byte near the start means binary
+        if b"\x00" in data[:8192]:
+            errors.append(f"Binary file (contains NUL bytes), not sent: {file}")
+            continue
+
+        content_parts.append(f"\nFile: {file}")
+        content_parts.append(FILE_SEPARATOR)
+        content_parts.append(data.decode("utf-8", errors="replace"))
+        content_parts.append("")
+
+    if total_size > max_total_size:
+        errors.append(
+            f"Total size {total_size:,} bytes exceeds the {max_total_size:,}-byte budget "
+            f"(model context minus output and reasoning reserve, ~4 bytes per token)"
+        )
+
     return "\n".join(content_parts), total_size
 
 

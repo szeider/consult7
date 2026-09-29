@@ -12,9 +12,6 @@ MAX_REASONING_TOKENS = 31_999  # OpenRouter maximum reasoning cap (actual limit 
 # Dynamic reasoning allocation ratio (for Gemini 3 "enabled" mode)
 DYNAMIC_REASONING_RATIO = 0.50  # Use 50% of model max for dynamic reasoning
 
-# File size limits
-MAX_PER_FILE_BYTES = 10_000_000  # 10MB per file limit
-
 # Token estimation constants
 CHARS_PER_TOKEN_REGULAR = 3.2  # Characters per token for regular text/code
 CHARS_PER_TOKEN_HTML = 2.5  # Characters per token for HTML/XML
@@ -167,10 +164,11 @@ MODEL_MAX_OUTPUT = {
 DEFAULT_MAX_OUTPUT = 32_000
 
 
-def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> tuple[int, int]:
-    """Calculate maximum file size in bytes based on model's context window.
+def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> int:
+    """Calculate the maximum total file size in bytes based on model's context window.
 
     Uses generous limits - lets the API be the final arbiter if context overflows.
+    There is no separate per-file limit: one file may use the whole budget.
 
     Args:
         context_length: Model's context window in tokens
@@ -178,7 +176,7 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
         model_name: The model name
 
     Returns:
-        Tuple of (max_total_bytes, max_per_file_bytes)
+        Maximum total bytes for all files together
     """
     # Reserve tokens for output
     output_reserve = DEFAULT_OUTPUT_TOKENS
@@ -214,12 +212,7 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
     available_tokens = max(available_tokens, 10_000)  # Minimum 10k tokens
 
     # Convert tokens to bytes (approximately 4 bytes per token for code)
-    max_total_bytes = available_tokens * 4
-
-    # Per-file limit: generous - 50% of total or max per file, whichever is smaller
-    max_per_file = min(max_total_bytes // 2, MAX_PER_FILE_BYTES)
-
-    return max_total_bytes, max_per_file
+    return available_tokens * 4
 
 
 def estimate_tokens(text: str) -> int:

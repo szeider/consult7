@@ -166,9 +166,9 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 **Automatically ignored:** `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`. Wildcards skip them; naming one explicitly is an error.
 
-**Fail fast:** a relative or missing path, a directory, a wildcard that matches nothing, an explicitly named ignored file, or files over the model's size limit fail the whole call before anything is sent to the model (no cost). The error lists every problem, and for size problems the per-file and total limits.
+**Fail fast:** a relative or missing path, a directory, a wildcard that matches nothing, an explicitly named ignored file, a binary file (NUL bytes in the first 8 KB), or files over the model's size budget fail the whole call before anything is sent to the model (no cost). The error lists every problem.
 
-**Size limits:** Dynamic based on model context window (e.g., Grok 4.20: ~8MB, GPT-6 Astra: ~4MB)
+**Size budget:** one total for all files together, no per-file limit: (model context − output reserve − reasoning reserve) × ~4 bytes per token, e.g. ~4 MB for 1M-context models, ~2 MB for Grok 4.7 (500K), ~8 MB for Grok 4.20 (2M). A second check on the estimated token count keeps a 10% safety margin. A size error states the budget and the total requested.
 
 ## Tool Parameters
 
@@ -234,6 +234,12 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.11.2
+- **No per-file size limit.** The files share one total budget, so a single large file can use all of it (before, one file was capped at half the budget). Size errors report the total requested and the budget, and token errors mention the 10% safety margin.
+- **Binary files fail fast** (NUL bytes in the first 8 KB) instead of being sent as garbage tokens.
+- **Unknown model IDs:** when a model is not in OpenRouter's model list, errors say so, name the assumed 128K context, and suggest the closest listed IDs. Variant IDs such as `model:nitro` use the base model's context size.
+- **Footer:** wall-clock `time`, the mode always shown (`[fast]` too), `zdr` shown when on. Both token estimates now use the same prompt text, and a rejected `fast` call no longer claims `reasoning disabled`.
 
 ### v3.11.1
 - **Fail fast before any paid call.** A missing file in a list, a wildcard that matches nothing, an explicitly named ignored file (`.env`, `secrets.py`, ...), or files over the model's per-file or total size limit now fail the call with a clear error before anything is sent. Before, these were reported only inside the prompt (or dropped), and the paid call went through on partial input.

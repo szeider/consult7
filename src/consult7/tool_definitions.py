@@ -30,7 +30,7 @@ class ToolDescriptions:
         # descriptions, so the rules a caller needs most come first.
         return f"""Analyze files with an LLM - provide absolute file paths, query, model, and mode. Stateless: every call must list complete absolute paths.
 
-Files: absolute paths; wildcards only in filenames and with an extension (/path/*.py, not /path/*/x.py or /path/*). Never sent: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules (wildcards skip them; naming one is an error). A bad path, a wildcard with no match, or files over the model's size limit fail the call before anything is sent (no cost). files=[] means query only.
+Files: absolute paths; wildcards only in filenames and with an extension (/path/*.py, not /path/*/x.py or /path/*). Never sent: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules (wildcards skip them; naming one is an error). A bad path, a wildcard with no match, a binary file, or files over the model's size budget fail the call before anything is sent (no cost). files=[] means query only.
 
 {provider_notes}
 

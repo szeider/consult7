@@ -78,6 +78,16 @@ async def main():
     args = sys.argv[1:]
     test_mode = False
 
+    if any(arg in ("-h", "--help") for arg in args):
+        print("Usage: consult7 <api-key> [--test]")
+        print()
+        print("Note: Uses OpenRouter as the model provider")
+        print()
+        print("Examples:")
+        print("  consult7 sk-or-v1-...")
+        print("  consult7 sk-or-v1-... --test")
+        sys.exit(EXIT_SUCCESS)
+
     # Check for --test flag at the end
     if args and args[-1] == "--test":
         test_mode = True

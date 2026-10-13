@@ -39,7 +39,6 @@ include = [
 [dependency-groups]
 dev = [
     "ruff>=0.15.12",
-    "anthropic>=0.97.0",  # For MCP testing support
 ]
 
 [tool.ruff]

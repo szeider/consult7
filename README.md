@@ -22,7 +22,7 @@
 
 * **Files:** `["/Users/john/project/src/*.py", "/Users/john/project/lib/*.py"]`
 * **Query:** "Summarize the architecture and main components of this Python project"
-* **Model:** `"google/gemini-3-flash-preview"`
+* **Model:** `"google/gemini-3.8-flash"`
 * **Mode:** `"fast"`
 
 ### Deep analysis with reasoning
@@ -34,21 +34,20 @@
 ### Generate a report saved to file
 * **Files:** `["/Users/john/project/src/*.py", "/Users/john/project/tests/*.py"]`
 * **Query:** "Generate a comprehensive code review report with architecture analysis, code quality assessment, and improvement recommendations"
-* **Model:** `"google/gemini-3.1-pro-preview"`
+* **Model:** `"google/gemini-4-argon"`
 * **Mode:** `"think"`
 * **Output File:** `"/Users/john/reports/code_review.md"`
 * **Result:** Returns `"Result has been saved to /Users/john/reports/code_review.md"` plus a one-line metadata footer, instead of flooding the agent's context
 
-## Featured: Gemini 3.1 Models
+## Featured: Gemini Models
 
-Consult7 supports **Google's Gemini 3.1** family:
-- **Gemini 3.1 Pro** (`google/gemini-3.1-pro-preview`) - Flagship reasoning model, 1M context
-- **Gemini 3 Flash** (`google/gemini-3-flash-preview`) - Ultra-fast model, 1M context
-- **Gemini 3.1 Flash Lite** (`google/gemini-3.1-flash-lite-preview`) - Ultra-fast lite model, 1M context
+Consult7 supports **Google's Gemini** family:
+- **Gemini 4 Argon** (`google/gemini-4-argon`) - Flagship reasoning model, 1M context
+- **Gemini 3.8 Flash** (`google/gemini-3.8-flash`) - Fast and cheap, 1M context
 
 **Quick mnemonics for power users:**
-- **`gemt`** = Gemini 3.1 Pro + think (flagship reasoning)
-- **`gemf`** = Gemini 3 Flash + fast (ultra fast)
+- **`gemt`** = Gemini 4 Argon + think (flagship reasoning)
+- **`gemf`** = Gemini 3.8 Flash + fast (fast and cheap)
 - **`gptt`** = GPT-6 Astra + think (latest GPT, effort xhigh)
 - **`grot`** = Grok 4.7 + think (effort xhigh)
 - **`oput`** = Claude Opus 4.8 + think (adaptive thinking)
@@ -118,9 +117,8 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | Model | Context | Use Case |
 |-------|---------|----------|
 | `openai/gpt-6-astra` | 1M | Latest top-tier GPT, effort-based reasoning; premium price |
-| `google/gemini-3.1-pro-preview` | 1M | **Flagship reasoning model** |
-| `google/gemini-3-flash-preview` | 1M | **Gemini 3 Flash, ultra fast** |
-| `google/gemini-3.1-flash-lite-preview` | 1M | Ultra-fast lite model |
+| `google/gemini-4-argon` | 1M | **Flagship Gemini, effort-based reasoning** |
+| `google/gemini-3.8-flash` | 1M | **Gemini 3.8 Flash, fast and cheap** |
 | `anthropic/claude-fable-5.1` | 1M | Most capable; **premium price — reserved for hard problems** |
 | `anthropic/claude-opus-4.8` | 1M | Best quality, adaptive thinking |
 | `anthropic/claude-sonnet-4.6` | 1M | Excellent reasoning, fast |
@@ -130,17 +128,17 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | `x-ai/grok-4.1-fast` | 2M | Largest context window |
 | `openrouter/fusion` | 128k | Multi-model panel + judge (see Featured: Fusion) |
 
-Superseded IDs still work with their tuned settings: `openai/gpt-5.6-sol`, `x-ai/grok-4.6`, `anthropic/claude-fable-5`.
+Superseded IDs still work with their tuned settings: `openai/gpt-5.6-sol`, `x-ai/grok-4.6`, `anthropic/claude-fable-5`, `google/gemini-3.1-pro-preview`.
 
 **Quick mnemonics:**
 - `gptt` = `openai/gpt-6-astra` + `think` (latest GPT, deep reasoning [effort xhigh]; premium)
-- `gemt` = `google/gemini-3.1-pro-preview` + `think` (Gemini 3.1 Pro, flagship reasoning)
+- `gemt` = `google/gemini-4-argon` + `think` (Gemini 4 Argon, deep reasoning [effort high])
 - `grot` = `x-ai/grok-4.7` + `think` (Grok 4.7, deep reasoning [effort xhigh]; 500K context — use `x-ai/grok-4.20` for bigger bundles)
 - `oput` = `anthropic/claude-opus-4.8` + `think` (Claude Opus, adaptive thinking)
 - `opuf` = `anthropic/claude-opus-4.8` + `fast` (Claude Opus, no reasoning)
 - `fabt` = `anthropic/claude-fable-5.1` + `think` (Claude Fable, deepest reasoning [effort xhigh]; premium, hard problems only)
 - `fabm` = `anthropic/claude-fable-5.1` + `mid` (Claude Fable, high-effort reasoning; premium)
-- `gemf` = `google/gemini-3-flash-preview` + `fast` (Gemini 3 Flash, ultra fast)
+- `gemf` = `google/gemini-3.8-flash` + `fast` (Gemini 3.8 Flash, fast and cheap)
 - `ULTRA` = call GPTT, GROT, and FABT IN PARALLEL (3 frontier models for maximum insight)
 - `FUSE` = `openrouter/fusion` (one call: a frontier panel deliberates, a judge synthesizes; mode sets web-research depth)
 
@@ -148,7 +146,7 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 ## Performance Modes
 
-- **`fast`**: No reasoning requested - quick answers, simple tasks. GPT-6 Astra, Grok 4.7 and Fable reason by design, so on them `fast` means their own default level (billed), shown in the footer as `reasoning: model default`
+- **`fast`**: No reasoning requested - quick answers, simple tasks. GPT-6 Astra, Grok 4.7 and Fable reason by design, so on them `fast` means their own default level (billed), shown in the footer as `reasoning: model default`. Gemini 4 Argon, 3.8 Flash and 3.1 Pro get an explicit effort in every mode: `fast` = low, `mid` = medium, `think` = high
 - **`mid`**: Moderate reasoning - code reviews, bug analysis
 - **`think`**: Maximum reasoning - security audits, complex refactoring
 
@@ -185,7 +183,7 @@ The consultation tool accepts the following parameters:
   - Useful for generating reports, documentation, or analyses without flooding the agent's context
 - **zdr** (optional): Enable Zero Data Retention routing (default: `false`)
   - When `true`, routes only to endpoints with ZDR policy (prompts not retained by provider)
-  - ZDR available: GPT-6 Astra, Grok 4.7, Gemini 3.1 Pro/Flash, Claude Opus 4.8, GPT-5, GPT-5.5, Grok 4.6
+  - ZDR available: GPT-6 Astra, Grok 4.7, Gemini 4 Argon, Gemini 3.8 Flash, Gemini 3.1 Pro, Claude Opus 4.8, GPT-5, GPT-5.5, Grok 4.6
   - Not available: Claude Fable 5.1 and 5, GPT-5.6 Sol, Grok 4.20 (returns error)
 
 ## Usage Examples
@@ -198,7 +196,7 @@ Claude Code will automatically use the tool with proper parameters:
 {
   "files": ["/Users/john/project/src/*.py"],
   "query": "Explain the main architecture",
-  "model": "google/gemini-3-flash-preview",
+  "model": "google/gemini-3.8-flash",
   "mode": "fast"
 }
 ```
@@ -211,7 +209,7 @@ from consult7.consultation import consultation_impl
 result = await consultation_impl(
     files=["/path/to/file.py"],
     query="Explain this code",
-    model="google/gemini-3-flash-preview",
+    model="google/gemini-3.8-flash",
     mode="fast",  # fast, mid, or think
     provider="openrouter",
     api_key="sk-or-v1-..."
@@ -234,6 +232,12 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.12.0
+- **Gemini 4 Argon** (`google/gemini-4-argon`) is the flagship Gemini and the `gemt` model. **Gemini 3.8 Flash** (`google/gemini-3.8-flash`) replaces Gemini 3 Flash for `gemf`. Both support ZDR.
+- **Gemini reasoning levels fixed.** Gemini 4 Argon, 3.8 Flash and 3.1 Pro reason even without a reasoning parameter, so the old mapping (`fast` sent nothing, `mid` sent effort low) made `mid` reason less than `fast` (about a third as much on 3.1 Pro). These models now get an explicit effort in every mode: `fast` = low, `mid` = medium, `think` = high.
+- **Removed old Gemini models** from the tuned list: Gemini 3 Flash, 3.1 Flash Lite, 3 Pro (no longer on OpenRouter), 2.5 Pro and 2.5 Flash. They still run as unknown models, without reasoning parameters.
+- `consult7 --help` prints usage instead of being taken as the API key. Works on Python 3.15 (dependencies relocked, unused `anthropic` dev dependency removed).
 
 ### v3.11.2
 - **No per-file size limit.** The files share one total budget, so a single large file can use all of it (before, one file was capped at half the budget). Size errors report the total requested and the budget, and token errors mention the 10% safety margin.

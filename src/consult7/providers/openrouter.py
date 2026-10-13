@@ -24,6 +24,7 @@ from ..constants import (
 from ..token_utils import (
     TOKEN_SAFETY_FACTOR,
     estimate_tokens,
+    EFFORT_GEMINI,
     calculate_reasoning_max_tokens,
 )
 
@@ -140,15 +141,12 @@ class OpenRouterProvider(BaseProvider):
 
         # Track reasoning type for API call formatting
         uses_effort_reasoning = thinking_budget in ("effort_high", "effort_medium")
-        uses_enabled_reasoning = thinking_budget in ("enabled_high", "enabled_low")
         uses_toggle_reasoning = thinking_budget == "toggle_on"
         uses_effort_fable = thinking_budget in ("effort_fable_high", "effort_fable_xhigh")
+        uses_effort_gemini = thinking_budget in EFFORT_GEMINI
 
         # Calculate max_tokens using model-aware reasoning budget calculation
-        # This handles different models' reasoning token behavior:
-        # - OpenAI/Claude/Grok: reasoning consumes max_tokens budget
-        # - Gemini 2.5: reasoning is separate from output
-        # - Gemini 3: dynamic reasoning allocation
+        # (reasoning consumes the max_tokens budget for every tuned model)
         mode_for_calc = "think" if thinking_mode else "fast"
         max_output_tokens = calculate_reasoning_max_tokens(
             model_name, mode_for_calc, thinking_budget, base_max_output_tokens
@@ -158,11 +156,10 @@ class OpenRouterProvider(BaseProvider):
         if thinking_budget in (
             "effort_high",
             "effort_medium",
-            "enabled_high",
-            "enabled_low",
             "toggle_on",
             "effort_fable_high",
             "effort_fable_xhigh",
+            *EFFORT_GEMINI,
         ):
             reasoning_budget_actual = 0
         elif isinstance(thinking_budget, int):
@@ -266,10 +263,6 @@ class OpenRouterProvider(BaseProvider):
                 # OpenAI models: use effort level based on mode
                 effort_level = "high" if thinking_budget == "effort_high" else "medium"
                 data["reasoning"] = {"effort": effort_level}
-            elif uses_enabled_reasoning:
-                # Gemini 3 Pro: use effort level (maps to thinkingLevel via OpenAI compat)
-                effort_level = "high" if thinking_budget == "enabled_high" else "low"
-                data["reasoning"] = {"effort": effort_level}
             elif uses_toggle_reasoning:
                 # Claude Opus 4.8 / Grok 4.20: adaptive/automatic reasoning — enable only
                 # reasoning.effort and reasoning.max_tokens are ignored/unsupported
@@ -280,23 +273,28 @@ class OpenRouterProvider(BaseProvider):
                 # productive band; higher levels reserved (overthinking + extra cost).
                 effort_level = "high" if thinking_budget == "effort_fable_high" else "xhigh"
                 data["reasoning"] = {"effort": effort_level}
+            elif uses_effort_gemini:
+                # Gemini 4 Argon / 3.8 Flash / 3.1 Pro: effort in every mode (fast=low, mid=medium,
+                # think=high), since the bare call already reasons at medium or more
+                data["reasoning"] = {"effort": thinking_budget.removeprefix("effort_gemini_")}
             else:
-                # Older Anthropic, Gemini 2.5, and others: use max_tokens
+                # Older Anthropic and others: use max_tokens
                 data["reasoning"] = {"max_tokens": reasoning_budget_actual}
 
         # Reasoning-budget value to report back, computed once so the normal and
         # timeout-partial return paths agree (markers: -1/-2 OpenAI effort high/med,
-        # -3/-4 Gemini 3 effort high/low, -5 Opus 4.8 / Grok 4.20 adaptive enabled,
-        # -6/-7 effort_fable (Fable 5.x / Grok 4.6+ / GPT-6 Astra) effort high/xhigh;
+        # (-3/-4 retired: old Gemini 3 profile), -5 Opus 4.8 / Grok 4.20 adaptive enabled,
+        # -6/-7 effort_fable (Fable 5.x / Grok 4.6+ / GPT-6 Astra) effort high/xhigh,
+        # -8/-9/-10 effort_gemini (Gemini 4 Argon / 3.8 Flash / 3.1 Pro) effort low/medium/high;
         # an int for token-based reasoning; None when not in thinking mode).
         if thinking_mode and uses_effort_reasoning:
             budget_return = -1 if thinking_budget == "effort_high" else -2
-        elif thinking_mode and uses_enabled_reasoning:
-            budget_return = -3 if thinking_budget == "enabled_high" else -4
         elif thinking_mode and uses_toggle_reasoning:
             budget_return = -5
         elif thinking_mode and uses_effort_fable:
             budget_return = -6 if thinking_budget == "effort_fable_high" else -7
+        elif thinking_mode and uses_effort_gemini:
+            budget_return = -8 - EFFORT_GEMINI.index(thinking_budget)
         else:
             budget_return = reasoning_budget_actual if thinking_mode else None
 
@@ -335,7 +333,7 @@ class OpenRouterProvider(BaseProvider):
                                     f"Zero Data Retention not available for model '{model_name}'. "
                                     "No OpenRouter endpoint for this model meets the ZDR policy. "
                                     "Retry with zdr=false, or pick a ZDR-supported model "
-                                    "(e.g. google/gemini-3.1-pro-preview, anthropic/claude-opus-4.8). "
+                                    "(e.g. google/gemini-4-argon, anthropic/claude-opus-4.8). "
                                     f"Raw upstream response: {body_text}"
                                 ),
                                 None,
@@ -425,7 +423,7 @@ class OpenRouterProvider(BaseProvider):
                     f"\n\n[TRUNCATED — output incomplete. Exceeded the "
                     f"{OPENROUTER_TIMEOUT:.0f}s (~{budget_mins:.0f} min) wall-clock cap; "
                     f"the text above is what streamed before the cap. For FUSION, retry with "
-                    f"a single model (e.g. openai/gpt-6-astra, google/gemini-3.1-pro-preview) "
+                    f"a single model (e.g. openai/gpt-6-astra, google/gemini-4-argon) "
                     f"or split the question.]"
                 )
                 return (process_llm_response(full_response) + marker, None, budget_return, cost)

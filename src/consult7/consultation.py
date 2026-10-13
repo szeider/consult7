@@ -208,12 +208,6 @@ async def consultation_impl(
         elif thinking_budget == -2:
             # OpenAI effort=medium
             token_info += ", reasoning: effort=medium"
-        elif thinking_budget == -3:
-            # Gemini 3 effort=high (thinkingLevel=high)
-            token_info += ", reasoning: effort=high"
-        elif thinking_budget == -4:
-            # Gemini 3 effort=low (thinkingLevel=low)
-            token_info += ", reasoning: effort=low"
         elif thinking_budget == -5:
             # Opus 4.8 / Grok 4.20: adaptive reasoning, enabled only.
             # Model ignores effort/max_tokens, so mid and think produce identical API calls.
@@ -227,6 +221,9 @@ async def consultation_impl(
         elif thinking_budget == -7:
             # effort_fable effort=xhigh (think tier; higher levels reserved)
             token_info += ", reasoning: effort=xhigh"
+        elif thinking_budget in (-8, -9, -10):
+            # effort_gemini (Gemini 4 Argon / 3.8 Flash / 3.1 Pro): fast/mid/think = low/medium/high
+            token_info += f", reasoning: effort={('low', 'medium', 'high')[-8 - thinking_budget]}"
         elif thinking_budget > 0:
             # Calculate percentage of maximum possible reasoning tokens
             from .token_utils import MAX_REASONING_TOKENS

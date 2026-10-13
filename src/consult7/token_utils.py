@@ -9,7 +9,7 @@ TOKEN_SAFETY_FACTOR = 0.9  # Safety buffer for token calculations
 # Thinking/reasoning constants
 MAX_REASONING_TOKENS = 31_999  # OpenRouter maximum reasoning cap (actual limit for Anthropic)
 
-# Dynamic reasoning allocation ratio (for Gemini 3 "enabled" mode)
+# Reasoning headroom: share of the model max output given to adaptive/effort reasoning
 DYNAMIC_REASONING_RATIO = 0.50  # Use 50% of model max for dynamic reasoning
 
 # Token estimation constants
@@ -17,13 +17,8 @@ CHARS_PER_TOKEN_REGULAR = 3.2  # Characters per token for regular text/code
 CHARS_PER_TOKEN_HTML = 2.5  # Characters per token for HTML/XML
 TOKEN_ESTIMATION_BUFFER = 1.1  # 10% buffer for token estimation
 
-# Reasoning budget behavior types
-# - "from_output": Reasoning tokens consume max_tokens budget (OpenAI, Claude, Grok)
-# - "additional": Reasoning tokens are separate from output (Gemini 2.5)
-# - "dynamic": Model decides reasoning allocation (Gemini 3)
+# Reasoning budget behavior: reasoning tokens consume the max_tokens budget
 REASONING_FROM_OUTPUT = "from_output"
-REASONING_ADDITIONAL = "additional"
-REASONING_DYNAMIC = "dynamic"
 
 # OpenRouter effort level ratios (documented at openrouter.ai/docs/use-cases/reasoning-tokens)
 # These represent approximate fraction of max_tokens used for reasoning
@@ -50,15 +45,15 @@ THINKING_LIMITS = {
     "openai/gpt-5.5": "effort",  # legacy
     "openai/gpt-5.4": "effort",  # legacy
     "openai/gpt-5.2": "effort",  # legacy
-    # Google Gemini 3.1 models - use reasoning.enabled=true
-    "google/gemini-3.1-pro-preview": "enabled",
-    "google/gemini-3.1-flash-lite-preview": "enabled",
-    # Google Gemini 3 models (legacy, still valid)
-    "google/gemini-3-pro-preview": "enabled",
-    "google/gemini-3-flash-preview": "enabled",
-    # Google Gemini 2.5 models
-    "google/gemini-2.5-pro": 32_768,
-    "google/gemini-2.5-flash": 24_576,
+    # Gemini 4 Argon / 3.8 Flash / 3.1 Pro: reasoning mandatory and the bare call already
+    # reasons (Argon and 3.8 Flash ≈ medium, 3.1 Pro ≈ high), so leaving fast bare and
+    # sending low in mid made mid weaker than fast. effort_gemini sends an effort in every
+    # mode: fast=low, mid=medium, think=high. Probed reasoning tokens low/medium/high:
+    # Argon 0/450/1.2K (low skips thinking), 3.8 Flash 420/1.1K/2.7K, 3.1 Pro
+    # 1.2K/1.7K/4.5K. xhigh is accepted but not above high.
+    "google/gemini-4-argon": "effort_gemini",
+    "google/gemini-3.8-flash": "effort_gemini",
+    "google/gemini-3.1-pro-preview": "effort_gemini",  # legacy
     # Anthropic Claude models
     # Fable 5.1: all five native efforts accepted; honored and monotone from high up
     # (high/xhigh/max = 170/264/431 reasoning tokens); at low/medium/bare it usually skips
@@ -110,14 +105,10 @@ MODEL_REASONING_BEHAVIOR = {
     "anthropic/claude-haiku-4.5": REASONING_FROM_OUTPUT,
     "anthropic/claude-sonnet-4.5": REASONING_FROM_OUTPUT,  # legacy
     "anthropic/claude-opus-4.5": REASONING_FROM_OUTPUT,  # legacy
-    # Gemini 2.5: reasoning is additional to output
-    "google/gemini-2.5-pro": REASONING_ADDITIONAL,
-    "google/gemini-2.5-flash": REASONING_ADDITIONAL,
-    # Gemini 3.1/3: dynamic reasoning allocation
-    "google/gemini-3.1-pro-preview": REASONING_DYNAMIC,
-    "google/gemini-3.1-flash-lite-preview": REASONING_DYNAMIC,
-    "google/gemini-3-pro-preview": REASONING_DYNAMIC,  # legacy
-    "google/gemini-3-flash-preview": REASONING_DYNAMIC,  # legacy
+    # Gemini effort_gemini models: completion_tokens include reasoning
+    "google/gemini-4-argon": REASONING_FROM_OUTPUT,
+    "google/gemini-3.8-flash": REASONING_FROM_OUTPUT,
+    "google/gemini-3.1-pro-preview": REASONING_FROM_OUTPUT,  # legacy
     # Grok: reasoning from output
     "x-ai/grok-4.7": REASONING_FROM_OUTPUT,
     "x-ai/grok-4.6": REASONING_FROM_OUTPUT,  # legacy
@@ -143,12 +134,9 @@ MODEL_MAX_OUTPUT = {
     "anthropic/claude-haiku-4.5": 16_000,
     "anthropic/claude-sonnet-4.5": 64_000,  # legacy
     "anthropic/claude-opus-4.5": 32_000,  # legacy
-    "google/gemini-3.1-pro-preview": 65_536,
-    "google/gemini-3.1-flash-lite-preview": 65_536,
-    "google/gemini-3-pro-preview": 65_536,  # legacy
-    "google/gemini-3-flash-preview": 65_536,  # legacy
-    "google/gemini-2.5-pro": 65_536,
-    "google/gemini-2.5-flash": 65_536,
+    "google/gemini-4-argon": 65_536,
+    "google/gemini-3.8-flash": 65_536,
+    "google/gemini-3.1-pro-preview": 65_536,  # legacy
     # Grok 4.7 / 4.6: OpenRouter lists 450k max output, but max_tokens also reserves context
     # (openrouter.py: input room = context − max_tokens). 128k keeps the 50% reasoning
     # headroom at 64k, leaving most of the 500k context for input.
@@ -159,6 +147,9 @@ MODEL_MAX_OUTPUT = {
     "x-ai/grok-4.1-fast": 131_072,
     "x-ai/grok-4-fast": 131_072,  # legacy
 }
+
+# effort_gemini markers (Gemini 4 Argon / 3.8 Flash / 3.1 Pro), sent in fast/mid/think
+EFFORT_GEMINI = ("effort_gemini_low", "effort_gemini_medium", "effort_gemini_high")
 
 # Default max output when model not in table
 DEFAULT_MAX_OUTPUT = 32_000
@@ -189,15 +180,12 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
         # OpenAI effort-based: use appropriate effort ratio
         effort_key = "high" if thinking_budget_value == "effort_high" else "medium"
         thinking_budget = int(output_reserve * EFFORT_RATIOS[effort_key])
-    elif thinking_budget_value in ("enabled_high", "enabled_low"):
-        # Gemini 3 Pro: reasoning is dynamic, use dynamic ratio
-        thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value == "toggle_on":
         # Opus 4.8 / Grok 4.20: adaptive reasoning, use dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
-    elif thinking_budget_value in ("effort_fable_high", "effort_fable_xhigh"):
-        # effort_fable (Fable 5.x / Grok 4.6+ / GPT-6 Astra): effort honored; reasoning
-        # consumes output budget — use dynamic ratio
+    elif thinking_budget_value in ("effort_fable_high", "effort_fable_xhigh") + EFFORT_GEMINI:
+        # effort_fable (Fable 5.x / Grok 4.6+ / GPT-6 Astra) and effort_gemini (Gemini 4
+        # Argon / 3.8 Flash / 3.1 Pro): effort honored; reasoning consumes output budget — dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value is not None:
         thinking_budget = thinking_budget_value
@@ -245,14 +233,20 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
         mode: Performance mode - "fast", "mid", or "think"
 
     Returns:
-        Thinking token budget, "effort" for OpenAI models, "enabled" for Gemini 3 Pro, or None for fast mode
+        Thinking token budget, a reasoning marker string ("effort_*", "toggle_on"), or None
     """
+    # Get model's max thinking limit
+    limit = THINKING_LIMITS.get(model_name)
+
+    # Gemini 4 Argon / 3.8 Flash / 3.1 Pro: an explicit effort in every mode, fast included
+    if limit == "effort_gemini":
+        return {"fast": "effort_gemini_low", "mid": "effort_gemini_medium"}.get(
+            mode, "effort_gemini_high"
+        )
+
     # Fast mode: no thinking
     if mode == "fast":
         return None
-
-    # Get model's max thinking limit
-    limit = THINKING_LIMITS.get(model_name)
 
     if limit is None:
         # Unknown model - return None to disable thinking
@@ -262,11 +256,6 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
     if limit == "effort":
         # Return different markers for mid vs think
         return "effort_medium" if mode == "mid" else "effort_high"
-
-    # Gemini 3 Pro uses thinkingLevel (low/high) via reasoning.effort
-    if limit == "enabled":
-        # Return different markers for mid vs think
-        return "enabled_low" if mode == "mid" else "enabled_high"
 
     # Fable 5.x / Grok 4.6+ / GPT-6 Astra: OpenRouter honors the native effort scale. Two tiers in
     # the productive band (mid=high, think=xhigh); higher levels reserved to avoid
@@ -299,15 +288,12 @@ def calculate_reasoning_max_tokens(
 ) -> int:
     """Calculate appropriate max_tokens for a model in reasoning mode.
 
-    Different models handle reasoning tokens differently:
-    - from_output: Reasoning consumes max_tokens (OpenAI effort, Claude, Grok)
-    - additional: Reasoning is separate from output (Gemini 2.5)
-    - dynamic: Model decides allocation (Gemini 3)
+    Reasoning tokens consume the max_tokens budget for every tuned model.
 
     Args:
         model_name: The model name
         mode: Performance mode ("fast", "mid", "think")
-        thinking_budget: The thinking budget value ("effort", "enabled", int, or None)
+        thinking_budget: The thinking budget value (marker string, int, or None)
         base_output_tokens: Base output tokens for non-reasoning responses
 
     Returns:
@@ -337,19 +323,14 @@ def calculate_reasoning_max_tokens(
         # Cap at model max to avoid API errors
         return min(max(calculated, MIN_REASONING_BUDGET), model_max)
 
-    elif thinking_budget in ("enabled_high", "enabled_low"):
-        # Gemini 3 dynamic: model allocates reasoning internally
-        # Use dynamic ratio - model handles the split
-        return int(model_max * DYNAMIC_REASONING_RATIO)
-
     elif thinking_budget == "toggle_on":
         # Opus 4.8 / Grok 4.20: adaptive/automatic reasoning — no budget knob
         # Reasoning counts toward max_tokens, so give generous headroom
         return int(model_max * DYNAMIC_REASONING_RATIO)
 
-    elif thinking_budget in ("effort_fable_high", "effort_fable_xhigh"):
-        # Fable 5.x / Grok 4.6+ / GPT-6 Astra: effort honored; reasoning counts toward
-        # max_tokens. Give generous headroom (verbose at higher effort) — 50% of the 128k ceiling.
+    elif thinking_budget in ("effort_fable_high", "effort_fable_xhigh") + EFFORT_GEMINI:
+        # Fable 5.x / Grok 4.6+ / GPT-6 Astra / effort_gemini models: effort honored;
+        # reasoning counts toward max_tokens. Generous headroom — 50% of the model ceiling.
         return int(model_max * DYNAMIC_REASONING_RATIO)
 
     elif isinstance(thinking_budget, int):
@@ -358,10 +339,6 @@ def calculate_reasoning_max_tokens(
             # Reasoning comes from max_tokens: need reasoning + response space
             # Cap at model max to avoid API errors
             return min(thinking_budget + base_output_tokens, model_max)
-        elif behavior == REASONING_ADDITIONAL:
-            # Reasoning is separate: just need response space
-            # (reasoning budget passed separately in API)
-            return base_output_tokens
         else:
             # Dynamic or unknown: conservative allocation
             return thinking_budget + base_output_tokens

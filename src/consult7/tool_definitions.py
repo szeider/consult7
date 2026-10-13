@@ -7,9 +7,8 @@ class ToolDescriptions:
     MODEL_EXAMPLES = {
         "openrouter": [
             '"openai/gpt-6-astra" (GPT-6 Astra, 1M context, top-tier GPT — premium price)',
-            '"google/gemini-3.1-pro-preview" (Gemini 3.1 Pro, 1M context, flagship reasoning)',
-            '"google/gemini-3-flash-preview" (Gemini 3 Flash, 1M context, fast)',
-            '"google/gemini-3.1-flash-lite-preview" (Gemini 3.1 Flash Lite, 1M context, ultra fast)',
+            '"google/gemini-4-argon" (Gemini 4 Argon, 1M context, flagship Gemini)',
+            '"google/gemini-3.8-flash" (Gemini 3.8 Flash, 1M context, fast and cheap)',
             '"anthropic/claude-fable-5.1" (Claude Fable 5.1, 1M context, most capable — premium price, for hard problems)',
             '"anthropic/claude-opus-4.8" (Claude Opus 4.8, 1M context, adaptive thinking)',
             '"anthropic/claude-sonnet-4.6" (Claude Sonnet 4.6, 1M context)',
@@ -38,11 +37,11 @@ Tips: for hard questions, spawn 3 parallel calls with varied formulations. Put l
 
 Mnemonics:
 - gptt = openai/gpt-6-astra + think (premium)
-- gemt = google/gemini-3.1-pro-preview + think
+- gemt = google/gemini-4-argon + think
 - grot = x-ai/grok-4.7 + think (500K context, slow; bigger bundles: x-ai/grok-4.20, 2M)
 - oput / opuf = anthropic/claude-opus-4.8 + think / fast
 - fabt / fabm = anthropic/claude-fable-5.1 + think / mid (premium, hard problems)
-- gemf = google/gemini-3-flash-preview + fast
+- gemf = google/gemini-3.8-flash + fast
 - ULTRA = GPTT, GROT and FABT in parallel (3 calls in one message)
 - FUSE = openrouter/fusion (panel + judge in one call; mode sets web-research depth; 128K context)"""
 
@@ -92,7 +91,7 @@ Mnemonics:
         return (
             "Optional: Enable Zero Data Retention. When true, routes only to endpoints "
             "with ZDR policy (prompts not retained by provider). Default: false. "
-            "ZDR available: GPT-6 Astra, Grok 4.7, Gemini 3.1 Pro/Flash, Claude Opus 4.8, "
+            "ZDR available: GPT-6 Astra, Grok 4.7, Gemini 4 Argon, Gemini 3.8 Flash, Gemini 3.1 Pro, Claude Opus 4.8, "
             "GPT-5, GPT-5.5, Grok 4.6. "
             "Not available: Claude Fable 5.1 and 5 (require 30-day retention), GPT-5.6 Sol, "
             "Grok 4.20"

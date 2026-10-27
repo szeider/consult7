@@ -1,12 +1,83 @@
 """File discovery, formatting, and utilities for Consult7."""
 
+import bisect
 import os
 import glob
+import re
+import zlib
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, List
+from typing import Optional, Tuple, List
 
-from .constants import DEFAULT_IGNORED, MAX_TOTAL_SIZE, FILE_SEPARATOR
+from .constants import DEFAULT_IGNORED, MAX_TOTAL_SIZE, MAX_PDF_PAYLOAD, FILE_SEPARATOR
+
+
+@dataclass
+class PdfFile:
+    """A PDF to send to the model as a native document part (v3.12.0)."""
+
+    path: Path
+    data: bytes
+    pages: int  # 0 = could not be determined
+
+
+# "/Type /Page" (not "/Pages"), in plain objects or inside Flate-compressed
+# object streams (pdfTeX and most modern producers). Pages are counted by
+# object number, because incremental updates (arXiv restamping, macOS Preview)
+# rewrite page objects and leave the old copies in the file.
+_PAGE_RE = re.compile(rb"/Type\s*/Page(?![s\w])")
+_OBJ_HEADER_RE = re.compile(rb"(\d+)\s+\d+\s+obj\s*$")
+_OBJSTM_RE = re.compile(rb"/Type\s*/ObjStm")
+_STREAM_START_RE = re.compile(rb"stream\r?\n")
+_INT_RE = re.compile(rb"/(N|First)\s+(\d+)")
+
+
+def _owning_object(data: bytes, pos: int) -> Optional[int]:
+    """Object number of the 'N G obj' header nearest before pos, if any."""
+    header_end = data.rfind(b" obj", max(0, pos - 200_000), pos)
+    if header_end == -1:
+        return None
+    header = _OBJ_HEADER_RE.search(data[max(0, header_end - 40) : header_end + 4])
+    return int(header.group(1)) if header else None
+
+
+def count_pdf_pages(data: bytes) -> int:
+    """Count pages without a PDF library. Returns 0 when nothing is found
+    (unknown), never raises. Only literal searches: no regex may scan the
+    whole file with backtracking (a tempered-dot version took 97 s on 9 MB)."""
+    page_objects: set = set()
+
+    for match in _PAGE_RE.finditer(data):
+        if (number := _owning_object(data, match.start())) is not None:
+            page_objects.add(number)
+
+    for match in _OBJSTM_RE.finditer(data):
+        dict_start = data.rfind(b" obj", max(0, match.start() - 2_000), match.start())
+        stream = _STREAM_START_RE.search(data, match.end(), match.end() + 2_000)
+        if dict_start == -1 or not stream:
+            continue
+        fields = dict(_INT_RE.findall(data[dict_start : stream.start()]))
+        stream_end = data.find(b"endstream", stream.end())
+        if b"First" not in fields or stream_end == -1:
+            continue
+        try:
+            body = zlib.decompressobj().decompress(data[stream.end() : stream_end])
+        except zlib.error:
+            continue
+        first = int(fields[b"First"])
+        header_ints = body[:first].split()
+        starts = sorted(
+            (int(header_ints[i + 1]), int(header_ints[i]))
+            for i in range(0, len(header_ints) - 1, 2)
+        )
+        for page in _PAGE_RE.finditer(body, first):
+            offset = page.start() - first
+            index = bisect.bisect_right(starts, (offset, float("inf"))) - 1
+            if index >= 0:
+                page_objects.add(starts[index][1])
+
+    return len(page_objects)
 
 
 def should_ignore_path(path: Path) -> bool:
@@ -99,24 +170,34 @@ def expand_file_patterns(file_patterns: List[str]) -> Tuple[List[Path], List[str
     return sorted(list(matching_files)), errors
 
 
+def is_pdf_path(path: Path) -> bool:
+    return path.suffix.lower() == ".pdf"
+
+
 def format_content(
     files: List[Path],
     errors: List[str],
     max_total_size: int = MAX_TOTAL_SIZE,
-) -> Tuple[str, int]:
-    """Format files into text content.
+) -> Tuple[str, int, List[PdfFile]]:
+    """Format files into text content; PDFs are returned separately.
 
     Args:
         files: List of file paths to format
         errors: List to append errors to (binary, unreadable, over budget)
-        max_total_size: Maximum total size in bytes (model-dependent)
+        max_total_size: Maximum total text size in bytes (model-dependent)
 
     Returns:
-        Tuple of (content, total_size). total_size counts every file, so an
-        over-budget error can report the full size of the request.
+        Tuple of (content, total_size, pdfs). total_size counts every file
+        (text and PDF bytes), so an over-budget error can report the full size
+        of the request. PDFs do not count against max_total_size (their bytes
+        are no token proxy); they have their own wire-size budget and a
+        per-page token estimate.
     """
     content_parts = []
     total_size = 0
+    text_size = 0
+    pdf_payload = 0  # base64 size, what actually goes over the wire
+    pdfs: List[PdfFile] = []
 
     sorted_files = sorted(files)
 
@@ -140,7 +221,8 @@ def format_content(
     for dir_path in sorted(dirs):
         content_parts.append(f"{dir_path}/")
         for filename in sorted(dirs[dir_path]):
-            content_parts.append(f"  - {filename}")
+            tag = " (PDF, attached as a document)" if filename.lower().endswith(".pdf") else ""
+            content_parts.append(f"  - {filename}{tag}")
 
     content_parts.append("")
 
@@ -152,15 +234,36 @@ def format_content(
     # before anything is sent, so the LLM never sees a partial bundle.
     for file in sorted_files:
         try:
-            total_size += file.stat().st_size
-            if total_size > max_total_size:
-                continue  # over budget: keep summing sizes for the error, skip reading
+            size = file.stat().st_size
+            total_size += size
+            if is_pdf_path(file):
+                pdf_payload += (size + 2) // 3 * 4
+                if pdf_payload > MAX_PDF_PAYLOAD:
+                    continue  # over budget: keep summing for the error, skip reading
+            else:
+                text_size += size
+                if text_size > max_total_size:
+                    continue
             data = file.read_bytes()
         except PermissionError:
             errors.append(f"Permission denied reading file: {file}")
             continue
         except Exception as e:
             errors.append(f"Error reading file {file}: {e}")
+            continue
+
+        if is_pdf_path(file):
+            # Sent to the model as a native document part, not as text
+            if not data.startswith(b"%PDF-"):
+                errors.append(f"Not a PDF (missing %PDF header), not sent: {file}")
+                continue
+            pdf = PdfFile(file, data, count_pdf_pages(data))
+            pdfs.append(pdf)
+            pages = f"{pdf.pages} pages" if pdf.pages else "page count unknown"
+            content_parts.append(f"\nFile: {file}")
+            content_parts.append(FILE_SEPARATOR)
+            content_parts.append(f"[PDF, {pages}: attached as document '{file.name}' below]")
+            content_parts.append("")
             continue
 
         # Same heuristic as git: a NUL byte near the start means binary
@@ -173,13 +276,18 @@ def format_content(
         content_parts.append(data.decode("utf-8", errors="replace"))
         content_parts.append("")
 
-    if total_size > max_total_size:
+    if text_size > max_total_size:
         errors.append(
-            f"Total size {total_size:,} bytes exceeds the {max_total_size:,}-byte budget "
+            f"Total text size {text_size:,} bytes exceeds the {max_total_size:,}-byte budget "
             f"(model context minus output and reasoning reserve, ~4 bytes per token)"
         )
+    if pdf_payload > MAX_PDF_PAYLOAD:
+        errors.append(
+            f"PDFs total {pdf_payload:,} bytes base64-encoded, over the {MAX_PDF_PAYLOAD:,}-byte "
+            f"request limit; send fewer or smaller PDFs, or convert them to text first"
+        )
 
-    return "\n".join(content_parts), total_size
+    return "\n".join(content_parts), total_size, pdfs
 
 
 def validate_output_path(output_path: str) -> str:

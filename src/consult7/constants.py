@@ -4,6 +4,13 @@
 # this is only the default for format_content)
 MAX_TOTAL_SIZE = 4_000_000  # 4MB total (~1M tokens with 3.5 chars/token)
 MAX_RESPONSE_SIZE = 100_000  # 100KB response
+# PDFs (v3.12.0) are sent as native document parts, so their bytes are not a
+# token proxy; they get a separate wire-size budget (base64 total) sized for
+# the smallest vendor request cap (Anthropic: 32 MB per request). Their token
+# cost is estimated per page in token_utils.
+MAX_PDF_PAYLOAD = 32_000_000
+PDF_PAGE_LIMIT_ANTHROPIC = 600  # pages per request on 1M-context Claude models
+PDF_PAGE_FALLBACK_BYTES = 50_000  # bytes per page when the count is unknown
 FILE_SEPARATOR = "-" * 80
 
 # Default ignored paths
@@ -43,7 +50,7 @@ DEFAULT_CONTEXT_LENGTH = 128_000  # Default context when not available from API
 LLM_CALL_TIMEOUT = OPENROUTER_TIMEOUT + 120.0  # backstop only (~32 minutes)
 
 # Application constants
-SERVER_VERSION = "3.12.0"
+SERVER_VERSION = "3.13.0"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 MIN_ARGS = 1

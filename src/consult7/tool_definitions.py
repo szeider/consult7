@@ -7,6 +7,7 @@ class ToolDescriptions:
     MODEL_EXAMPLES = {
         "openrouter": [
             '"openai/gpt-6-astra" (GPT-6 Astra, 1M context, top-tier GPT — premium price)',
+            '"openai/gpt-6.1-terra" (GPT-6.1 Terra, 1M context, cheap GPT at 1/10 of Astra; no ZDR)',
             '"google/gemini-4-argon" (Gemini 4 Argon, 1M context, flagship Gemini)',
             '"google/gemini-3.8-flash" (Gemini 3.8 Flash, 1M context, fast and cheap)',
             '"anthropic/claude-fable-5.1" (Claude Fable 5.1, 1M context, most capable — premium price, for hard problems)',
@@ -29,7 +30,9 @@ class ToolDescriptions:
         # descriptions, so the rules a caller needs most come first.
         return f"""Analyze files with an LLM - provide absolute file paths, query, model, and mode. Stateless: every call must list complete absolute paths.
 
-Files: absolute paths; wildcards only in filenames and with an extension (/path/*.py, not /path/*/x.py or /path/*). Never sent: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules (wildcards skip them; naming one is an error). A bad path, a wildcard with no match, a binary file, or files over the model's size budget fail the call before anything is sent (no cost). files=[] means query only.
+Files: absolute paths; wildcards only in filenames and with an extension (/path/*.py, not /path/*/x.py or /path/*). Never sent: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules (wildcards skip them; naming one is an error). A bad path, a wildcard with no match, a binary file (other than .pdf), or files over the model's size budget fail the call before anything is sent (no cost). files=[] means query only.
+
+PDFs: .pdf files go to the model natively as page images (math and handwriting are read from the rendering; ~500 input tokens per page on Gemini, ~1,500 on GPT, ~2,500-3,000 on Claude and Grok). Models without PDF input are rejected before the call. For a long PDF on a premium model (Fable, GPT-6 Astra), convert it to text first (pdftotext) and send the .txt.
 
 {provider_notes}
 
@@ -62,7 +65,8 @@ Mnemonics:
         """Get the files parameter description."""
         return (
             'Absolute file paths or patterns. Example: ["/path/src/*.py", "/path/README.md"]. '
-            "Use [] for a query without files."
+            "Use [] for a query without files. .pdf files are attached natively (see the "
+            "tool description for cost)."
         )
 
     @classmethod
@@ -93,8 +97,8 @@ Mnemonics:
             "with ZDR policy (prompts not retained by provider). Default: false. "
             "ZDR available: GPT-6 Astra, Grok 4.7, Gemini 4 Argon, Gemini 3.8 Flash, Gemini 3.1 Pro, Claude Opus 4.8, "
             "GPT-5, GPT-5.5, Grok 4.6. "
-            "Not available: Claude Fable 5.1 and 5 (require 30-day retention), GPT-5.6 Sol, "
-            "Grok 4.20"
+            "Not available: Claude Fable 5.1 and 5 (require 30-day retention), GPT-6.1 Terra, "
+            "GPT-5.6 Sol, Grok 4.20"
         )
 
     @classmethod

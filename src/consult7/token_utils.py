@@ -39,6 +39,10 @@ THINKING_LIMITS = {
     # (verified low/medium/high/xhigh/max all 200; 33/45/72/105/160 reasoning tokens on a
     # moderate prompt) — reuse the effort_fable profile: fast=default, mid=high, think=xhigh.
     "openai/gpt-6-astra": "effort_fable",
+    # GPT-6.1 Terra (v3.12.0, cheap GPT, $1/$5): reasoning optional (`none` → 200 but
+    # wrong answers), bare ≈ medium, effort honored (probe 2026-10-27, local/probe-terra.md)
+    # — same shape as Astra, so effort_fable: fast = bare, mid = high, think = xhigh. ZDR 404.
+    "openai/gpt-6.1-terra": "effort_fable",
     # GPT-5.6 Sol: OpenRouter honors the effort scale (verified low/med/high/xhigh all 200,
     # reasoning tokens scale 457/516/942 on a hard prompt) — same shape as gpt-5.5.
     "openai/gpt-5.6-sol": "effort",  # legacy
@@ -91,6 +95,7 @@ THINKING_LIMITS = {
 MODEL_REASONING_BEHAVIOR = {
     # OpenAI: reasoning consumes max_tokens, effort-based (can use 50k+ tokens)
     "openai/gpt-6-astra": REASONING_FROM_OUTPUT,
+    "openai/gpt-6.1-terra": REASONING_FROM_OUTPUT,
     "openai/gpt-5.6-sol": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.5": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.4": REASONING_FROM_OUTPUT,  # legacy
@@ -123,6 +128,7 @@ MODEL_MAX_OUTPUT = {
     "anthropic/claude-fable-5.1": 128_000,
     "anthropic/claude-fable-5": 128_000,  # legacy
     "openai/gpt-6-astra": 128_000,
+    "openai/gpt-6.1-terra": 128_000,
     "openai/gpt-5.6-sol": 128_000,  # legacy
     "openai/gpt-5.5": 128_000,  # legacy
     "openai/gpt-5.4": 128_000,  # legacy
@@ -153,6 +159,30 @@ EFFORT_GEMINI = ("effort_gemini_low", "effort_gemini_medium", "effort_gemini_hig
 
 # Default max output when model not in table
 DEFAULT_MAX_OUTPUT = 32_000
+
+# Native PDF input (v3.12.0): approximate prompt tokens per page, by vendor
+# prefix of the model ID. Measured 2026-10-27 on a dense 15-page typeset paper
+# (per page: Gemini 3.8 Flash 525, GPT-6 Astra/6.1 Terra 1,518, Fable 5.1 2,565,
+# Grok 4.7 2,858) and an 11-page handwritten scan (Gemini 532, Astra ~2,900).
+# Gemini bills a fixed image rate per page; the others scale with page content.
+# Fusion's panel includes Claude, so it takes the Claude figure.
+PDF_TOKENS_PER_PAGE = {
+    "google/": 600,
+    "anthropic/": 2_600,
+    "x-ai/": 3_000,
+    "openai/": 1_600,
+    "openrouter/": 2_600,
+}
+PDF_TOKENS_PER_PAGE_DEFAULT = 2_000
+
+
+def estimate_pdf_tokens(model_name: str, pages: int) -> int:
+    """Prompt tokens a PDF of `pages` pages adds for this model (approximate)."""
+    per_page = next(
+        (t for prefix, t in PDF_TOKENS_PER_PAGE.items() if model_name.startswith(prefix)),
+        PDF_TOKENS_PER_PAGE_DEFAULT,
+    )
+    return pages * per_page
 
 
 def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> int:

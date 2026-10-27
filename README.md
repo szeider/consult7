@@ -164,7 +164,9 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 **Automatically ignored:** `__pycache__`, `.env`, `secrets.py`, `.DS_Store`, `.git`, `node_modules`. Wildcards skip them; naming one explicitly is an error.
 
-**Fail fast:** a relative or missing path, a directory, a wildcard that matches nothing, an explicitly named ignored file, a binary file (NUL bytes in the first 8 KB), or files over the model's size budget fail the whole call before anything is sent to the model (no cost). The error lists every problem.
+**Fail fast:** a relative or missing path, a directory, a wildcard that matches nothing, an explicitly named ignored file, a binary file (NUL bytes in the first 8 KB; `.pdf` excepted), or files over the model's size budget fail the whole call before anything is sent to the model (no cost). The error lists every problem.
+
+**PDFs (v3.12.0):** `.pdf` files are sent to the model as native documents through OpenRouter (the model sees the pages, including figures), next to the text files in the same call. Models that do not list file input on OpenRouter are rejected before the call. Typeset math and handwriting are read from the rendered page, not from the PDF text layer (verified on equations from a LaTeX paper and on a scanned handwritten submission). A page costs roughly 500 input tokens on Gemini, 1,500 on GPT and 2,500-3,000 on Claude and Grok, so for a long PDF on a premium model, convert it to text first (`pdftotext`) and send the `.txt`. PDFs have their own 32 MB wire-size budget; Anthropic models take at most 600 pages per request. PDFs are always forwarded natively, never through OpenRouter's OCR parsers, so no PDF leaves the chosen model's provider (this holds with `zdr` too).
 
 **Size budget:** one total for all files together, no per-file limit: (model context − output reserve − reasoning reserve) × ~4 bytes per token, e.g. ~4 MB for 1M-context models, ~2 MB for Grok 4.7 (500K), ~8 MB for Grok 4.20 (2M). A second check on the estimated token count keeps a 10% safety margin. A size error states the budget and the total requested.
 
@@ -232,6 +234,10 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.13.0
+- **PDF input.** `.pdf` files in `files` go to the model as native documents (OpenRouter `file` content parts, native engine only, no OCR fallback). Mixed with text files in one call; page count and PDF count shown in the footer; token estimate per page by vendor; models without file input, oversized PDF payloads (32 MB base64) and more than 600 pages on Anthropic models fail before the call.
+- **GPT-6.1 Terra** (`openai/gpt-6.1-terra`) added as the cheap GPT option: 1M context, $1/$5 per million tokens, effort-based reasoning (mid = high, think = xhigh), no ZDR. GPT-6 Astra stays the default GPT.
 
 ### v3.12.0
 - **Gemini 4 Argon** (`google/gemini-4-argon`) is the flagship Gemini and the `gemt` model. **Gemini 3.8 Flash** (`google/gemini-3.8-flash`) replaces Gemini 3 Flash for `gemf`. Both support ZDR.

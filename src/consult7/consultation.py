@@ -10,6 +10,7 @@ from .constants import (
     LLM_CALL_TIMEOUT,
     FUSION_MODEL,
     FUSION_MAX_TOOL_CALLS,
+    PDF_PAGE_LIMIT_ANTHROPIC,
 )
 from .file_processor import (
     expand_file_patterns,
@@ -19,12 +20,11 @@ from .file_processor import (
 )
 from .token_utils import (
     THINKING_LIMITS,
-    estimate_tokens,
     get_thinking_budget,
     calculate_max_file_size,
 )
 from .providers import PROVIDERS
-from .providers.base import build_messages
+from .providers.base import estimate_input_tokens, pdf_page_count
 
 logger = logging.getLogger("consult7")
 
@@ -38,6 +38,39 @@ class ConsultationError(Exception):
 def plural_files(count: int) -> str:
     """Return "1 file" or "N files"."""
     return f"{count} file" if count == 1 else f"{count} files"
+
+
+def pdf_summary(pdfs: list) -> str:
+    """ ", 2 PDFs (31 pages)" for the size line and footer; empty without PDFs."""
+    if not pdfs:
+        return ""
+    n, pages = len(pdfs), pdf_page_count(pdfs)
+    return f", {n} PDF{'s' if n != 1 else ''} ({pages} page{'s' if pages != 1 else ''})"
+
+
+def pdf_support_error(model: str, model_info: dict, pdfs: list) -> str:
+    """Why these PDFs cannot go to this model, or "" if they can (fail fast).
+
+    OpenRouter's model list says which models take files natively; others would be
+    routed through paid OCR, which the explicit native engine turns into an API
+    error, but the check here saves the round trip. Fusion lists only text yet
+    accepts PDFs (verified 2026-10-27). Unlisted models pass; the API decides.
+    """
+    modalities = model_info.get("input_modalities")
+    if modalities is not None and "file" not in modalities and model != FUSION_MODEL:
+        listed = ", ".join(modalities) or "none"
+        return (
+            f"{model} does not accept PDF input (OpenRouter input modalities: {listed}). "
+            f"Convert the PDF to text first (e.g. pdftotext) and send the .txt, "
+            f"or use a model that lists 'file' input"
+        )
+    pages = pdf_page_count(pdfs)
+    if model.startswith("anthropic/") and pages > PDF_PAGE_LIMIT_ANTHROPIC:
+        return (
+            f"{pages} PDF pages exceed Anthropic's {PDF_PAGE_LIMIT_ANTHROPIC}-page limit per "
+            f"request for {model}; split the PDFs or convert them to text first"
+        )
+    return ""
 
 
 def unlisted_model_note(model: str, model_info: dict) -> str:
@@ -139,8 +172,11 @@ async def consultation_impl(
         # Calculate dynamic file size limits based on model's context window
         max_total_size = calculate_max_file_size(model_context_length, mode, model)
 
-        # Format content with model-specific limits
-        content, total_size = format_content(file_paths, errors, max_total_size)
+        # Format content with model-specific limits; PDFs come back separately
+        content, total_size, pdfs = format_content(file_paths, errors, max_total_size)
+
+        if pdfs and not errors and (pdf_error := pdf_support_error(model, model_info, pdfs)):
+            errors.append(pdf_error)
 
         if errors:
             raise ConsultationError(
@@ -150,16 +186,20 @@ async def consultation_impl(
             )
 
         # Add size info that will be part of the query
-        size_info = f"\n\n---\nTotal content size: {total_size:,} bytes from {plural_files(len(file_paths))}"
+        size_info = (
+            f"\n\n---\nTotal content size: {total_size:,} bytes from "
+            f"{plural_files(len(file_paths))}{pdf_summary(pdfs)}"
+        )
 
     else:
         # No files: query-only mode
         content = ""
         total_size = 0
+        pdfs = []
         size_info = ""
 
-    # Same message text the provider sends, so both token estimates agree
-    estimated_tokens = estimate_tokens("".join(build_messages(content + size_info, query)))
+    # Same estimate the provider makes, so both agree
+    estimated_tokens = estimate_input_tokens(content + size_info, query, pdfs, model)
     token_info = f"\nEstimated tokens: ~{estimated_tokens:,}"
     if model_context_length:
         token_info += f" (Model limit: {model_context_length:,} tokens)"
@@ -186,6 +226,7 @@ async def consultation_impl(
                 thinking_budget_value,
                 zdr,
                 mode,
+                pdfs=pdfs,
             )
     except asyncio.TimeoutError:
         backstop_mins = LLM_CALL_TIMEOUT / 60
@@ -264,7 +305,7 @@ async def consultation_impl(
 
     mode_str = f" [{mode}, zdr]" if zdr else f" [{mode}]"
     metadata_footer = (
-        f"Processed {plural_files(len(file_paths))} ({total_size:,} bytes) "
+        f"Processed {plural_files(len(file_paths))} ({total_size:,} bytes{pdf_summary(pdfs)}) "
         f"with {model}{mode_str} ({provider}){token_info}"
     )
 

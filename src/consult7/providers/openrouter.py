@@ -4,10 +4,11 @@ import asyncio
 import difflib
 import json
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Sequence, Tuple
 import httpx
 
-from .base import BaseProvider, build_messages, process_llm_response
+from .base import BaseProvider, build_messages, estimate_input_tokens, process_llm_response
+from ..file_processor import PdfFile
 from ..constants import (
     OPENROUTER_URL,
     MODELS_URL,
@@ -23,7 +24,6 @@ from ..constants import (
 )
 from ..token_utils import (
     TOKEN_SAFETY_FACTOR,
-    estimate_tokens,
     EFFORT_GEMINI,
     calculate_reasoning_max_tokens,
 )
@@ -77,6 +77,10 @@ class OpenRouterProvider(BaseProvider):
                         ),
                         "provider": "openrouter",
                         "pricing": model_info.get("pricing"),
+                        # "file" here means the model takes PDFs natively (v3.12.0)
+                        "input_modalities": (model_info.get("architecture") or {}).get(
+                            "input_modalities", []
+                        ),
                         "raw_info": model_info,  # Keep full info for debugging
                     }
 
@@ -103,6 +107,7 @@ class OpenRouterProvider(BaseProvider):
         thinking_budget: Optional[int] = None,
         zdr: bool = False,
         mode: str = "fast",
+        pdfs: Sequence[PdfFile] = (),
     ) -> Tuple[str, Optional[str], Optional[int], Optional[float]]:
         """Call OpenRouter API with the content and query.
 
@@ -129,10 +134,9 @@ class OpenRouterProvider(BaseProvider):
         except Exception as e:
             return "", str(e), None, None
 
-        # Estimate tokens for the input
-        system_msg, user_msg = build_messages(content, query)
-        total_input = system_msg + user_msg
-        estimated_tokens = estimate_tokens(total_input)
+        # Estimate tokens for the input (PDF pages counted per vendor rate)
+        system_msg, user_msg = build_messages(content, query, pdfs)
+        estimated_tokens = estimate_input_tokens(content, query, pdfs, model_name)
 
         # Base output token limit
         base_max_output_tokens = (
@@ -256,6 +260,15 @@ class OpenRouterProvider(BaseProvider):
                     "max_tool_calls": FUSION_MAX_TOOL_CALLS.get(mode, 8),
                 }
             ]
+
+        # PDFs (v3.12.0): name the native engine explicitly. Without it OpenRouter
+        # silently falls back to paid Mistral OCR on a route without native PDF
+        # support, even with provider.zdr=true (verified 2026-10-27); with it such
+        # a route fails (502) instead. On native routes it changes nothing.
+        if pdfs:
+            data.setdefault("plugins", []).append(
+                {"id": "file-parser", "pdf": {"engine": "native"}}
+            )
 
         # Add reasoning mode if thinking_mode is enabled
         if thinking_mode:

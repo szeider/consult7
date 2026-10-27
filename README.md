@@ -235,6 +235,11 @@ claude mcp remove consult7 -s user
 
 ## Version History
 
+### v3.13.1
+- PDF budget stated up front: the tool description and the refusal now say about 24 MB of PDF files per call (the 32 MB limit is on the base64 payload) and that scans run 1-2 MB per page.
+- A mid-stream upstream timeout error says it is transient and that consult7 does not retry, so a caller knows to rerun.
+- The package and `consultation_impl` docstrings state that the MCP tool is the only supported interface; batch work is the calling agent's job (one tool call per item, `output_file` for the answers). `consult7.__version__` now reports the real version.
+
 ### v3.13.0
 - **PDF input.** `.pdf` files in `files` go to the model as native documents (OpenRouter `file` content parts, native engine only, no OCR fallback). Mixed with text files in one call; page count and PDF count shown in the footer; token estimate per page by vendor; models without file input, oversized PDF payloads (32 MB base64) and more than 600 pages on Anthropic models fail before the call.
 - **GPT-6.1 Terra** (`openai/gpt-6.1-terra`) added as the cheap GPT option: 1M context, $1/$5 per million tokens, effort-based reasoning (mid = high, think = xhigh), no ZDR. GPT-6 Astra stays the default GPT.

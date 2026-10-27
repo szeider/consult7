@@ -32,7 +32,7 @@ class ToolDescriptions:
 
 Files: absolute paths; wildcards only in filenames and with an extension (/path/*.py, not /path/*/x.py or /path/*). Never sent: __pycache__, .env, secrets.py, .DS_Store, .git, node_modules (wildcards skip them; naming one is an error). A bad path, a wildcard with no match, a binary file (other than .pdf), or files over the model's size budget fail the call before anything is sent (no cost). files=[] means query only.
 
-PDFs: .pdf files go to the model natively as page images (math and handwriting are read from the rendering; ~500 input tokens per page on Gemini, ~1,500 on GPT, ~2,500-3,000 on Claude and Grok). Models without PDF input are rejected before the call. For a long PDF on a premium model (Fable, GPT-6 Astra), convert it to text first (pdftotext) and send the .txt.
+PDFs: .pdf files go to the model natively as page images (math and handwriting read from the rendering; ~500 tokens/page on Gemini, ~1,500 on GPT, ~2,500-3,000 on Claude and Grok). At most ~24 MB of PDFs per call (scans: 1-2 MB/page). Models without PDF input are rejected before the call. For a long PDF on a premium model (Fable, Astra), convert to text first (pdftotext) and send the .txt.
 
 {provider_notes}
 

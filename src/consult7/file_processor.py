@@ -284,7 +284,8 @@ def format_content(
     if pdf_payload > MAX_PDF_PAYLOAD:
         errors.append(
             f"PDFs total {pdf_payload:,} bytes base64-encoded, over the {MAX_PDF_PAYLOAD:,}-byte "
-            f"request limit; send fewer or smaller PDFs, or convert them to text first"
+            f"request limit (about {MAX_PDF_PAYLOAD * 3 // 4 // 1_000_000} MB of PDF files per "
+            f"call; scans run 1-2 MB per page); send fewer or smaller PDFs, or convert them to text first"
         )
 
     return "\n".join(content_parts), total_size, pdfs

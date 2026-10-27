@@ -393,9 +393,18 @@ class OpenRouterProvider(BaseProvider):
                                         if isinstance(error_obj, dict)
                                         else str(error_obj)
                                     )
+                                    # Upstream idle timeouts on big multi-PDF calls are
+                                    # transient (a rerun usually succeeds); say so, since
+                                    # consult7 never retries (fast fail)
+                                    hint = (
+                                        " (transient upstream stall; consult7 does not retry, "
+                                        "rerun the call or send fewer PDFs)"
+                                        if "timeout" in err_msg.lower()
+                                        else ""
+                                    )
                                     return (
                                         "",
-                                        f"API error (mid-stream): {err_msg}",
+                                        f"API error (mid-stream): {err_msg}{hint}",
                                         None,
                                         cost,
                                     )

@@ -135,7 +135,7 @@ wheels = [
 
 [[package]]
 name = "consult7"
-version = "3.13.0"
+version = "3.13.1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

@@ -146,6 +146,11 @@ async def consultation_impl(
 ) -> str:
     """Implementation of the consultation tool logic.
 
+    Internal: the MCP `consultation` tool calls this. Not a public API; the
+    signature and return format change between releases without notice. Scripts
+    should not import it. Batch work belongs to the calling agent: one tool call
+    per item, several in parallel, with `output_file` so only the footer returns.
+
     Returns the response text; raises ConsultationError on failure. Every input
     problem is detected before the paid LLM call (fast fail, no partial bundles).
     """

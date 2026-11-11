@@ -326,6 +326,7 @@ class OpenRouterProvider(BaseProvider):
         # Kept so that a paid call that never reaches its answer returns something.
         collected_reasoning = []
         finish_reason = None
+        native_finish_reason = None  # the provider's own reason, e.g. Gemini "RECITATION"
         cost = None  # USD cost, captured from the final usage chunk
         timed_out = False
 
@@ -436,6 +437,8 @@ class OpenRouterProvider(BaseProvider):
                                     # Track finish_reason
                                     if choice.get("finish_reason"):
                                         finish_reason = choice["finish_reason"]
+                                    if choice.get("native_finish_reason"):
+                                        native_finish_reason = choice["native_finish_reason"]
 
                             except json.JSONDecodeError:
                                 # Skip malformed chunks
@@ -513,17 +516,29 @@ class OpenRouterProvider(BaseProvider):
                 cost,
             )
 
+        stop_detail = f"finish_reason={finish_reason}"
+        if native_finish_reason and native_finish_reason != finish_reason:
+            stop_detail += f", provider reason {native_finish_reason}"
+
         if not has_answer:
             if reasoning_text:
-                cause = f"the stream ended (finish_reason={finish_reason}) without answer text"
+                cause = f"the stream ended ({stop_detail}) without answer text"
                 return (no_answer_response(cause, reasoning_text), None, budget_return, cost)
-            reason = f", finish_reason={finish_reason}" if finish_reason else ""
+            reason = f", {stop_detail}" if finish_reason else ""
             return "", f"No content received from API (empty response{reason})", None, cost
 
         llm_response = process_llm_response(full_response)
 
-        # Log finish_reason for debugging truncation issues
-        if finish_reason and finish_reason != "stop":
-            logger.warning(f"Response finish_reason: {finish_reason} (may indicate truncation)")
+        # Any end other than a normal stop means the provider cut the answer off, e.g.
+        # finish_reason "error" with Gemini's RECITATION filter, which stopped a Flash answer
+        # in the middle of a line (2026-11-11), or "content_filter". Mark it like the other
+        # partial answers instead of returning it as complete.
+        if finish_reason not in (None, "stop", "tool_calls"):
+            logger.warning(f"Response ended early: {stop_detail}")
+            llm_response += truncated_marker(
+                f"The provider ended the answer early ({stop_detail}); the text above is "
+                f"what streamed before that",
+                "Rephrase the request or split the task.",
+            )
 
         return (llm_response, None, budget_return, cost)

@@ -153,7 +153,7 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 - **`mid`**: Moderate reasoning - code reviews, bug analysis
 - **`think`**: Maximum reasoning - security audits, complex refactoring
 
-**Incomplete answers:** reasoning counts toward a call's output budget, and a call is capped at 30 minutes. When one of the two limits is reached, consult7 returns what it has instead of an error. A partial answer ends with a `[TRUNCATED ...]` line that names the limit. A call that produced only reasoning starts with a `[NO ANSWER ...]` line, followed by the model's reasoning as it was streamed. With `output_file`, the confirmation line carries a warning. Such a call is billed and consult7 does not retry: split the task into smaller steps and call again.
+**Incomplete answers:** reasoning counts toward a call's output budget, and a call is capped at 30 minutes. When one of the two limits is reached, consult7 returns what it has instead of an error. A partial answer ends with a `[TRUNCATED ...]` line that names the limit. The same line marks an answer that the provider itself ended early, for example through a content or recitation filter. A call that produced only reasoning starts with a `[NO ANSWER ...]` line, followed by the model's reasoning as it was streamed. With `output_file`, the confirmation line carries a warning. Such a call is billed and consult7 does not retry: split the task into smaller steps and call again.
 
 ## File Specification Rules
 
@@ -239,6 +239,9 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.14.1
+- **An answer that the provider cuts off early is marked.** When a stream ends for a reason other than a normal stop, the partial answer now ends with a `[TRUNCATED]` line that names the reason, and with `output_file` the confirmation line carries the warning. Before, such an answer was returned as if it were complete. Seen on Gemini 3.8 Flash, where Google's recitation filter stopped an answer in the middle of a line (`finish_reason: error`, provider reason `RECITATION`). Found by a black-box test of v3.14.0.
 
 ### v3.14.0
 - **Gemini 4 Carbon** (`google/gemini-4-carbon`) is the new flagship Gemini and the `gemt` model: 1M context, the same price as Argon ($2/$10 per million tokens), PDF input, ZDR supported. It uses the Gemini effort mapping (`fast` = low, `mid` = medium, `think` = high). In `think` it reasons several times longer than Argon: on a counting question in our tests, 18-28K reasoning tokens and 3.5-5.5 minutes, where Argon took about 5K and 1.5 minutes. It therefore gets a 65,536-token output budget in every mode (Argon and Flash: 32,768). **Gemini 4 Argon** stays available with its tuned settings as the faster and cheaper `think` option.

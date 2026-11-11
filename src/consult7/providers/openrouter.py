@@ -94,7 +94,8 @@ class OpenRouterProvider(BaseProvider):
                 # Model not found in list: tell the caller (fetch succeeded) and
                 # suggest close IDs, instead of the None that means "fetch failed"
                 logger.warning(f"Model '{model_name}' not found in OpenRouter models list")
-                ids = [i for i in by_id if i]
+                # "~..." IDs are auto-upgrading aliases without tuned settings: not suggested
+                ids = [i for i in by_id if i and not i.startswith("~")]
                 return {
                     "found": False,
                     "suggestions": difflib.get_close_matches(model_name, ids, n=3, cutoff=0.6),
@@ -329,6 +330,10 @@ class OpenRouterProvider(BaseProvider):
         native_finish_reason = None  # the provider's own reason, e.g. Gemini "RECITATION"
         cost = None  # USD cost, captured from the final usage chunk
         timed_out = False
+        # Set when the stream breaks after it started (error chunk or lost connection).
+        # What streamed until then is returned under a marker, as for the time cap.
+        stream_error = None
+        stream_error_hint = ""
 
         try:
             # Stream to keep the connection alive during long reasoning (prevents
@@ -396,32 +401,35 @@ class OpenRouterProvider(BaseProvider):
                                     cost = usage["cost"]
 
                                 # A mid-stream error arrives as a data chunk with a
-                                # top-level "error" key (after the initial 200). Surface
-                                # it instead of dropping it and later reporting a
-                                # misleading "No content received". Preserve any cost
-                                # already captured (fast-fail: return immediately).
+                                # top-level "error" key (after the initial 200). Stop
+                                # reading (fast fail, no retry) and keep what streamed.
+                                # Probe 2026-11-11: OpenRouter ended a Gemini 4 Carbon
+                                # stream with 502 "Network connection lost." 300 s after
+                                # the provider's last chunk (Carbon goes silent between
+                                # its last reasoning chunk and its answer, 170-210 s in
+                                # the calls that succeeded). That call was not billed.
                                 error_obj = chunk.get("error")
                                 if error_obj:
+                                    is_dict = isinstance(error_obj, dict)
                                     err_msg = (
                                         error_obj.get("message", str(error_obj))
-                                        if isinstance(error_obj, dict)
+                                        if is_dict
                                         else str(error_obj)
                                     )
-                                    # Upstream idle timeouts on big multi-PDF calls are
-                                    # transient (a rerun usually succeeds); say so, since
-                                    # consult7 never retries (fast fail)
-                                    hint = (
-                                        " (transient upstream stall; consult7 does not retry, "
-                                        "rerun the call or send fewer PDFs)"
-                                        if "timeout" in err_msg.lower()
-                                        else ""
-                                    )
-                                    return (
-                                        "",
-                                        f"API error (mid-stream): {err_msg}{hint}",
-                                        None,
-                                        cost,
-                                    )
+                                    stream_error = f"API error (mid-stream): {err_msg}"
+                                    code = error_obj.get("code") if is_dict else None
+                                    if code in (502, 503, 504, 524) or "timeout" in err_msg.lower():
+                                        advice = (
+                                            "send fewer PDFs"
+                                            if pdfs
+                                            else "narrow the question or lower the mode"
+                                        )
+                                        stream_error_hint = (
+                                            " (nothing was received before the upstream "
+                                            "failure; it is usually transient and consult7 "
+                                            f"does not retry: rerun the call, or {advice})"
+                                        )
+                                    break
 
                                 # Extract content from delta
                                 if "choices" in chunk and chunk["choices"]:
@@ -449,13 +457,35 @@ class OpenRouterProvider(BaseProvider):
             # the partial buffer — fall through to the partial-return path below.
             timed_out = True
         except Exception as e:
-            return "", f"Error calling API: {e}", None, None
+            # Includes a connection that drops mid-stream: keep what streamed
+            stream_error = f"Error calling API: {e}"
 
         # Combine all chunks
         full_response = "".join(collected_content)
         reasoning_text = "".join(collected_reasoning)
         # Whitespace alone (e.g. a lone "\n" delta) is no answer; keep the reasoning then
         has_answer = bool(full_response.strip())
+
+        # The stream broke: return what arrived under a marker; a bare error only if
+        # nothing arrived
+        if stream_error:
+            rerun = "rerun the call (consult7 does not retry) or narrow the question."
+            if has_answer:
+                marker = truncated_marker(
+                    f"The stream broke before the answer was complete ({stream_error}); "
+                    f"the text above is what streamed before that",
+                    rerun.capitalize(),
+                )
+                return (process_llm_response(full_response) + marker, None, budget_return, cost)
+            if reasoning_text:
+                cause = f"the stream broke before the model wrote an answer ({stream_error})"
+                return (
+                    no_answer_response(cause, reasoning_text, billed=False, advice=rerun),
+                    None,
+                    budget_return,
+                    cost,
+                )
+            return "", f"{stream_error}{stream_error_hint}", None, cost
 
         # Timed out: return the partial stream with a clear marker instead of a
         # bare error (usually still useful, and already billed upstream). cost is

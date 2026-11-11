@@ -153,7 +153,7 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 - **`mid`**: Moderate reasoning - code reviews, bug analysis
 - **`think`**: Maximum reasoning - security audits, complex refactoring
 
-**Incomplete answers:** reasoning counts toward a call's output budget, and a call is capped at 30 minutes. When one of the two limits is reached, consult7 returns what it has instead of an error. A partial answer ends with a `[TRUNCATED ...]` line that names the limit. The same line marks an answer that the provider itself ended early, for example through a content or recitation filter. A call that produced only reasoning starts with a `[NO ANSWER ...]` line, followed by the model's reasoning as it was streamed. With `output_file`, the confirmation line carries a warning. Such a call is billed and consult7 does not retry: split the task into smaller steps and call again.
+**Incomplete answers:** reasoning counts toward a call's output budget, and a call is capped at 30 minutes. When one of the two limits is reached, consult7 returns what it has instead of an error. A partial answer ends with a `[TRUNCATED ...]` line that names the limit. The same line marks an answer that the provider itself ended early, for example through a content or recitation filter, and an answer whose stream broke (an upstream error or a lost connection after the first text arrived). A call that produced only reasoning starts with a `[NO ANSWER ...]` line, followed by the model's reasoning as it was streamed. With `output_file`, the confirmation line carries a warning. Such a call is billed and consult7 does not retry: split the task into smaller steps and call again.
 
 ## File Specification Rules
 
@@ -239,6 +239,11 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.14.2
+- **A stream that breaks returns what arrived.** When OpenRouter reports an error after the stream has started, or the connection drops, the partial answer comes back with a `[TRUNCATED]` line that names the error, and a call that had only reasoned so far returns the streamed reasoning under `[NO ANSWER]`. With `output_file` both are saved and the confirmation line carries the warning. Before, the call returned only the error. Seen on Gemini 4 Carbon: in our tests it often sent nothing for three to four minutes between its reasoning and its answer, and OpenRouter ended one stream with `Network connection lost` after 300 seconds without data from the provider. That call was not billed. consult7 does not retry: rerun the call or narrow the question.
+- When nothing arrived before such an error, the message says so, and it suggests sending fewer PDFs only when PDFs were sent.
+- The `mode` description states that the listed Gemini models get effort `low` in `fast`. The suggestions for an unknown model ID no longer include OpenRouter's `~` alias IDs.
 
 ### v3.14.1
 - **An answer that the provider cuts off early is marked.** When a stream ends for a reason other than a normal stop, the partial answer now ends with a `[TRUNCATED]` line that names the reason, and with `output_file` the confirmation line carries the warning. Before, such an answer was returned as if it were complete. Seen on Gemini 3.8 Flash, where Google's recitation filter stopped an answer in the middle of a line (`finish_reason: error`, provider reason `RECITATION`). Found by a black-box test of v3.14.0.

@@ -8,7 +8,7 @@ class ToolDescriptions:
         "openrouter": [
             '"openai/gpt-6-astra" (GPT-6 Astra, 1M context, top-tier GPT — premium price)',
             '"openai/gpt-6.1-terra" (GPT-6.1 Terra, 1M context, cheap GPT at 1/10 of Astra; no ZDR)',
-            '"google/gemini-4-carbon" (Gemini 4 Carbon, 1M context, flagship Gemini; think is slow, minutes)',
+            '"google/gemini-4-carbon" (Gemini 4 Carbon, 1M context, flagship Gemini; slow: mid and think take minutes)',
             '"google/gemini-4-argon" (Gemini 4 Argon, 1M context, previous flagship, faster in think)',
             '"google/gemini-3.8-flash" (Gemini 3.8 Flash, 1M context, fast and cheap)',
             '"anthropic/claude-fable-5.1" (Claude Fable 5.1, 1M context, most capable — premium price, for hard problems)',
@@ -108,7 +108,7 @@ Mnemonics:
         return (
             "Modes: fast = no reasoning requested (GPT-6 Astra, Grok 4.7 and Fable still "
             "reason at their default level); mid = moderate reasoning; think = maximum "
-            "reasoning. Hitting the time cap or output budget returns the partial answer "
-            "marked [TRUNCATED], or only the reasoning marked [NO ANSWER]; then split the "
-            "task (FUSE: use one model)."
+            "reasoning. A time cap, spent output budget or broken stream returns the partial "
+            "answer marked [TRUNCATED], or only the reasoning marked [NO ANSWER]; then split "
+            "the task (FUSE: use one model)."
         )

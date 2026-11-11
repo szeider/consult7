@@ -87,11 +87,17 @@ def truncated_marker(cause: str, advice: str) -> str:
     return f"\n\n{TRUNCATED_TAG} — output incomplete. {cause}. {advice}]"
 
 
-def no_answer_response(cause: str, reasoning: str) -> str:
-    """Salvage a paid call that wrote no answer text: its streamed reasoning under a marker.
+def no_answer_response(
+    cause: str,
+    reasoning: str,
+    billed: bool = True,
+    advice: str = "split the task into smaller steps.",
+) -> str:
+    """Salvage a call that wrote no answer text: its streamed reasoning under a marker.
 
     The reasoning is often a summary of the model's thinking. When it is too long the
-    tail is kept, since it holds the latest state of the work.
+    tail is kept, since it holds the latest state of the work. `billed=False` drops the
+    billing sentence (a stream that the provider broke was not billed when checked).
     """
     if len(reasoning) > MAX_RESPONSE_SIZE:
         omitted = len(reasoning) - MAX_RESPONSE_SIZE
@@ -100,9 +106,9 @@ def no_answer_response(cause: str, reasoning: str) -> str:
             + reasoning[-MAX_RESPONSE_SIZE:]
         )
     return (
-        f"{NO_ANSWER_TAG} — {cause}. The call is billed. Below is the model's reasoning as "
-        f"streamed (often a summary), which may hold partial progress. To get an answer, "
-        f"split the task into smaller steps.]\n\n{reasoning}"
+        f"{NO_ANSWER_TAG} — {cause}.{' The call is billed.' if billed else ''} Below is the "
+        f"model's reasoning as streamed (often a summary), which may hold partial progress. "
+        f"To get an answer, {advice}]\n\n{reasoning}"
     )
 
 

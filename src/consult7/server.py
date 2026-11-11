@@ -148,7 +148,8 @@ async def main():
                             "description": (
                                 "Performance mode: 'fast' (no reasoning requested, fastest; "
                                 "GPT-6 Astra, Grok 4.7 and Fable still reason at their own "
-                                "default level), 'mid' (moderate reasoning), "
+                                "default level; the listed Gemini models get effort low), "
+                                "'mid' (moderate reasoning), "
                                 "'think' (maximum reasoning)"
                             ),
                         },

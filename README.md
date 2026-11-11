@@ -34,7 +34,7 @@
 ### Generate a report saved to file
 * **Files:** `["/Users/john/project/src/*.py", "/Users/john/project/tests/*.py"]`
 * **Query:** "Generate a comprehensive code review report with architecture analysis, code quality assessment, and improvement recommendations"
-* **Model:** `"google/gemini-4-argon"`
+* **Model:** `"google/gemini-4-carbon"`
 * **Mode:** `"think"`
 * **Output File:** `"/Users/john/reports/code_review.md"`
 * **Result:** Returns `"Result has been saved to /Users/john/reports/code_review.md"` plus a one-line metadata footer, instead of flooding the agent's context
@@ -42,11 +42,12 @@
 ## Featured: Gemini Models
 
 Consult7 supports **Google's Gemini** family:
-- **Gemini 4 Argon** (`google/gemini-4-argon`) - Flagship reasoning model, 1M context
+- **Gemini 4 Carbon** (`google/gemini-4-carbon`) - Flagship reasoning model, 1M context; `think` reasons long (minutes on hard questions)
+- **Gemini 4 Argon** (`google/gemini-4-argon`) - Previous flagship, 1M context; faster and cheaper per call in `think`
 - **Gemini 3.8 Flash** (`google/gemini-3.8-flash`) - Fast and cheap, 1M context
 
 **Quick mnemonics for power users:**
-- **`gemt`** = Gemini 4 Argon + think (flagship reasoning)
+- **`gemt`** = Gemini 4 Carbon + think (flagship reasoning)
 - **`gemf`** = Gemini 3.8 Flash + fast (fast and cheap)
 - **`gptt`** = GPT-6 Astra + think (latest GPT, effort xhigh)
 - **`grot`** = Grok 4.7 + think (effort xhigh)
@@ -117,7 +118,9 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | Model | Context | Use Case |
 |-------|---------|----------|
 | `openai/gpt-6-astra` | 1M | Latest top-tier GPT, effort-based reasoning; premium price |
-| `google/gemini-4-argon` | 1M | **Flagship Gemini, effort-based reasoning** |
+| `openai/gpt-6.1-terra` | 1M | Cheap GPT at a tenth of Astra's price; no ZDR |
+| `google/gemini-4-carbon` | 1M | **Flagship Gemini, effort-based reasoning; long thinking in `think`** |
+| `google/gemini-4-argon` | 1M | Previous Gemini flagship, faster in `think` |
 | `google/gemini-3.8-flash` | 1M | **Gemini 3.8 Flash, fast and cheap** |
 | `anthropic/claude-fable-5.1` | 1M | Most capable; **premium price — reserved for hard problems** |
 | `anthropic/claude-opus-4.8` | 1M | Best quality, adaptive thinking |
@@ -128,11 +131,11 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | `x-ai/grok-4.1-fast` | 2M | Largest context window |
 | `openrouter/fusion` | 128k | Multi-model panel + judge (see Featured: Fusion) |
 
-Superseded IDs still work with their tuned settings: `openai/gpt-5.6-sol`, `x-ai/grok-4.6`, `anthropic/claude-fable-5`, `google/gemini-3.1-pro-preview`.
+Superseded IDs still work with their tuned settings: `openai/gpt-5.6-sol`, `openai/gpt-5.5`, `x-ai/grok-4.6`, `anthropic/claude-fable-5`, `google/gemini-3.1-pro-preview`.
 
 **Quick mnemonics:**
 - `gptt` = `openai/gpt-6-astra` + `think` (latest GPT, deep reasoning [effort xhigh]; premium)
-- `gemt` = `google/gemini-4-argon` + `think` (Gemini 4 Argon, deep reasoning [effort high])
+- `gemt` = `google/gemini-4-carbon` + `think` (Gemini 4 Carbon, deep reasoning [effort high])
 - `grot` = `x-ai/grok-4.7` + `think` (Grok 4.7, deep reasoning [effort xhigh]; 500K context — use `x-ai/grok-4.20` for bigger bundles)
 - `oput` = `anthropic/claude-opus-4.8` + `think` (Claude Opus, adaptive thinking)
 - `opuf` = `anthropic/claude-opus-4.8` + `fast` (Claude Opus, no reasoning)
@@ -146,9 +149,11 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 ## Performance Modes
 
-- **`fast`**: No reasoning requested - quick answers, simple tasks. GPT-6 Astra, Grok 4.7 and Fable reason by design, so on them `fast` means their own default level (billed), shown in the footer as `reasoning: model default`. Gemini 4 Argon, 3.8 Flash and 3.1 Pro get an explicit effort in every mode: `fast` = low, `mid` = medium, `think` = high
+- **`fast`**: No reasoning requested - quick answers, simple tasks. GPT-6 Astra, Grok 4.7 and Fable reason by design, so on them `fast` means their own default level (billed), shown in the footer as `reasoning: model default`. Gemini 4 Carbon, 4 Argon, 3.8 Flash and 3.1 Pro get an explicit effort in every mode: `fast` = low, `mid` = medium, `think` = high
 - **`mid`**: Moderate reasoning - code reviews, bug analysis
 - **`think`**: Maximum reasoning - security audits, complex refactoring
+
+**Incomplete answers:** reasoning counts toward a call's output budget, and a call is capped at 30 minutes. When one of the two limits is reached, consult7 returns what it has instead of an error. A partial answer ends with a `[TRUNCATED ...]` line that names the limit. A call that produced only reasoning starts with a `[NO ANSWER ...]` line, followed by the model's reasoning as it was streamed. With `output_file`, the confirmation line carries a warning. Such a call is billed and consult7 does not retry: split the task into smaller steps and call again.
 
 ## File Specification Rules
 
@@ -166,7 +171,7 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 **Fail fast:** a relative or missing path, a directory, a wildcard that matches nothing, an explicitly named ignored file, a binary file (NUL bytes in the first 8 KB; `.pdf` excepted), or files over the model's size budget fail the whole call before anything is sent to the model (no cost). The error lists every problem.
 
-**PDFs (v3.12.0):** `.pdf` files are sent to the model as native documents through OpenRouter (the model sees the pages, including figures), next to the text files in the same call. Models that do not list file input on OpenRouter are rejected before the call. Typeset math and handwriting are read from the rendered page, not from the PDF text layer (verified on equations from a LaTeX paper and on a scanned handwritten submission). A page costs roughly 500 input tokens on Gemini, 1,500 on GPT and 2,500-3,000 on Claude and Grok, so for a long PDF on a premium model, convert it to text first (`pdftotext`) and send the `.txt`. PDFs have their own 32 MB wire-size budget; Anthropic models take at most 600 pages per request. PDFs are always forwarded natively, never through OpenRouter's OCR parsers, so no PDF leaves the chosen model's provider (this holds with `zdr` too).
+**PDFs (since v3.13.0):** `.pdf` files are sent to the model as native documents through OpenRouter (the model sees the pages, including figures), next to the text files in the same call. Models that do not list file input on OpenRouter are rejected before the call. Typeset math and handwriting are read from the rendered page, not from the PDF text layer (verified on equations from a LaTeX paper and on a scanned handwritten submission). A page costs roughly 500 input tokens on Gemini, 1,500 on GPT and 2,500-3,000 on Claude and Grok, so for a long PDF on a premium model, convert it to text first (`pdftotext`) and send the `.txt`. PDFs have their own budget of about 24 MB of PDF files per call (32 MB once base64-encoded; scans run 1-2 MB per page); Anthropic models take at most 600 pages per request. PDFs are always forwarded natively, never through OpenRouter's OCR parsers, so no PDF leaves the chosen model's provider (this holds with `zdr` too).
 
 **Size budget:** one total for all files together, no per-file limit: (model context − output reserve − reasoning reserve) × ~4 bytes per token, e.g. ~4 MB for 1M-context models, ~2 MB for Grok 4.7 (500K), ~8 MB for Grok 4.20 (2M). A second check on the estimated token count keeps a 10% safety margin. A size error states the budget and the total requested.
 
@@ -185,8 +190,8 @@ The consultation tool accepts the following parameters:
   - Useful for generating reports, documentation, or analyses without flooding the agent's context
 - **zdr** (optional): Enable Zero Data Retention routing (default: `false`)
   - When `true`, routes only to endpoints with ZDR policy (prompts not retained by provider)
-  - ZDR available: GPT-6 Astra, Grok 4.7, Gemini 4 Argon, Gemini 3.8 Flash, Gemini 3.1 Pro, Claude Opus 4.8, GPT-5, GPT-5.5, Grok 4.6
-  - Not available: Claude Fable 5.1 and 5, GPT-5.6 Sol, Grok 4.20 (returns error)
+  - ZDR available: GPT-6 Astra, Grok 4.7, Gemini 4 Carbon and Argon, Gemini 3.8 Flash, Gemini 3.1 Pro, Claude Opus 4.8, GPT-5, GPT-5.5, Grok 4.6
+  - Not available: Claude Fable 5.1 and 5, GPT-6.1 Terra, GPT-5.6 Sol, Grok 4.20 (returns error)
 
 ## Usage Examples
 
@@ -234,6 +239,12 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.14.0
+- **Gemini 4 Carbon** (`google/gemini-4-carbon`) is the new flagship Gemini and the `gemt` model: 1M context, the same price as Argon ($2/$10 per million tokens), PDF input, ZDR supported. It uses the Gemini effort mapping (`fast` = low, `mid` = medium, `think` = high). In `think` it reasons several times longer than Argon: on a counting question in our tests, 18-28K reasoning tokens and 3.5-5.5 minutes, where Argon took about 5K and 1.5 minutes. It therefore gets a 65,536-token output budget in every mode (Argon and Flash: 32,768). **Gemini 4 Argon** stays available with its tuned settings as the faster and cheaper `think` option.
+- **A call that runs out of output budget returns what it has.** Reasoning counts toward the output budget, and on a hard task a model can spend all of it thinking: two Fable 5.1 calls were billed more than $4 each and returned an empty response. Now an answer that was cut off comes back with a `[TRUNCATED]` marker that names the budget, and a call that wrote no answer text returns the model's streamed reasoning under a `[NO ANSWER]` marker. The same holds when the 30-minute cap is reached while the model is still reasoning. With `output_file`, the confirmation line warns that the file is incomplete.
+- **Larger output budget for Claude Fable 5.x, GPT-6 Astra and GPT-6.1 Terra** in `mid` and `think`: 128K tokens instead of 64K.
+- The "content too large for reasoning mode" error states the full output reservation, reasoning included.
 
 ### v3.13.1
 - PDF budget stated up front: the tool description and the refusal now say about 24 MB of PDF files per call (the 32 MB limit is on the base64 payload) and that scans run 1-2 MB per page.

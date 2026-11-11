@@ -7,7 +7,14 @@ import logging
 from typing import Optional, Sequence, Tuple
 import httpx
 
-from .base import BaseProvider, build_messages, estimate_input_tokens, process_llm_response
+from .base import (
+    BaseProvider,
+    build_messages,
+    estimate_input_tokens,
+    no_answer_response,
+    process_llm_response,
+    truncated_marker,
+)
 from ..file_processor import PdfFile
 from ..constants import (
     OPENROUTER_URL,
@@ -155,6 +162,9 @@ class OpenRouterProvider(BaseProvider):
         max_output_tokens = calculate_reasoning_max_tokens(
             model_name, mode_for_calc, thinking_budget, base_max_output_tokens
         )
+        # When the model list is unavailable the context falls back to 128K, which a
+        # full-ceiling budget (128K) would fill entirely; keep half of it for input
+        max_output_tokens = min(max_output_tokens, context_length // 2)
 
         # Track actual reasoning budget for reporting (0 for effort/enabled/toggle modes)
         if thinking_budget in (
@@ -204,7 +214,7 @@ class OpenRouterProvider(BaseProvider):
                             f"Content too large for reasoning mode: ~{estimated_tokens:,} tokens estimated, "
                             f"but only ~{available_for_input:,} tokens available with reasoning "
                             f"(~{available_without_reasoning:,} available without reasoning). "
-                            f"Context: {context_length:,}, output: {DEFAULT_OUTPUT_TOKENS:,}, reasoning: {reasoning_budget_actual:,}, "
+                            f"Context: {context_length:,}, output incl. reasoning: {max_output_tokens:,}, "
                             f"then a 10% safety margin. "
                             f"Try mode='fast'."
                         ),
@@ -287,7 +297,7 @@ class OpenRouterProvider(BaseProvider):
                 effort_level = "high" if thinking_budget == "effort_fable_high" else "xhigh"
                 data["reasoning"] = {"effort": effort_level}
             elif uses_effort_gemini:
-                # Gemini 4 Argon / 3.8 Flash / 3.1 Pro: effort in every mode (fast=low, mid=medium,
+                # Gemini 4 Carbon / Argon / 3.8 Flash / 3.1 Pro: effort in every mode (fast=low, mid=medium,
                 # think=high), since the bare call already reasons at medium or more
                 data["reasoning"] = {"effort": thinking_budget.removeprefix("effort_gemini_")}
             else:
@@ -298,7 +308,7 @@ class OpenRouterProvider(BaseProvider):
         # timeout-partial return paths agree (markers: -1/-2 OpenAI effort high/med,
         # (-3/-4 retired: old Gemini 3 profile), -5 Opus 4.8 / Grok 4.20 adaptive enabled,
         # -6/-7 effort_fable (Fable 5.x / Grok 4.6+ / GPT-6 Astra) effort high/xhigh,
-        # -8/-9/-10 effort_gemini (Gemini 4 Argon / 3.8 Flash / 3.1 Pro) effort low/medium/high;
+        # -8/-9/-10 effort_gemini (Gemini 4 Carbon / Argon / 3.8 Flash / 3.1 Pro) effort low/medium/high;
         # an int for token-based reasoning; None when not in thinking mode).
         if thinking_mode and uses_effort_reasoning:
             budget_return = -1 if thinking_budget == "effort_high" else -2
@@ -312,6 +322,9 @@ class OpenRouterProvider(BaseProvider):
             budget_return = reasoning_budget_actual if thinking_mode else None
 
         collected_content = []
+        # Streamed reasoning text (delta.reasoning; Fable sends a summary of its thinking).
+        # Kept so that a paid call that never reaches its answer returns something.
+        collected_reasoning = []
         finish_reason = None
         cost = None  # USD cost, captured from the final usage chunk
         timed_out = False
@@ -346,7 +359,7 @@ class OpenRouterProvider(BaseProvider):
                                     f"Zero Data Retention not available for model '{model_name}'. "
                                     "No OpenRouter endpoint for this model meets the ZDR policy. "
                                     "Retry with zdr=false, or pick a ZDR-supported model "
-                                    "(e.g. google/gemini-4-argon, anthropic/claude-opus-4.8). "
+                                    "(e.g. google/gemini-4-carbon, anthropic/claude-opus-4.8). "
                                     f"Raw upstream response: {body_text}"
                                 ),
                                 None,
@@ -416,6 +429,9 @@ class OpenRouterProvider(BaseProvider):
                                     chunk_content = delta.get("content", "")
                                     if chunk_content:
                                         collected_content.append(chunk_content)
+                                    chunk_reasoning = delta.get("reasoning")
+                                    if isinstance(chunk_reasoning, str) and chunk_reasoning:
+                                        collected_reasoning.append(chunk_reasoning)
 
                                     # Track finish_reason
                                     if choice.get("finish_reason"):
@@ -434,21 +450,29 @@ class OpenRouterProvider(BaseProvider):
 
         # Combine all chunks
         full_response = "".join(collected_content)
+        reasoning_text = "".join(collected_reasoning)
+        # Whitespace alone (e.g. a lone "\n" delta) is no answer; keep the reasoning then
+        has_answer = bool(full_response.strip())
 
         # Timed out: return the partial stream with a clear marker instead of a
         # bare error (usually still useful, and already billed upstream). cost is
         # normally None here because the usage chunk arrives at stream end.
         if timed_out:
             budget_mins = OPENROUTER_TIMEOUT / 60
-            if full_response:
-                marker = (
-                    f"\n\n[TRUNCATED — output incomplete. Exceeded the "
-                    f"{OPENROUTER_TIMEOUT:.0f}s (~{budget_mins:.0f} min) wall-clock cap; "
-                    f"the text above is what streamed before the cap. For FUSION, retry with "
-                    f"a single model (e.g. openai/gpt-6-astra, google/gemini-4-argon) "
-                    f"or split the question.]"
+            if has_answer:
+                marker = truncated_marker(
+                    f"Exceeded the {OPENROUTER_TIMEOUT:.0f}s (~{budget_mins:.0f} min) wall-clock "
+                    f"cap; the text above is what streamed before the cap",
+                    "For FUSION, retry with a single model (e.g. openai/gpt-6-astra, "
+                    "google/gemini-4-carbon) or split the question.",
                 )
                 return (process_llm_response(full_response) + marker, None, budget_return, cost)
+            if reasoning_text:
+                cause = (
+                    f"the call hit the {OPENROUTER_TIMEOUT:.0f}s (~{budget_mins:.0f} min) "
+                    f"wall-clock cap while the model was still reasoning"
+                )
+                return (no_answer_response(cause, reasoning_text), None, budget_return, cost)
             return (
                 "",
                 (
@@ -460,8 +484,41 @@ class OpenRouterProvider(BaseProvider):
                 cost,
             )
 
-        if not full_response:
-            return "", "No content received from API (empty response)", None, cost
+        # finish_reason "length": the output budget ran out. Reasoning counts toward
+        # max_tokens and cannot be capped next to an effort level (OpenRouter 400: only
+        # one of reasoning.effort and reasoning.max_tokens), so on a hard task the model
+        # can spend the whole budget thinking and never start its answer (2026-10-31:
+        # two Fable 5.1 calls billed $4+ each and returned an empty response).
+        budget = f"max_tokens = {max_output_tokens:,}, reasoning included"
+        if finish_reason == "length":
+            if has_answer:
+                marker = truncated_marker(
+                    f"The model reached its output budget ({budget}) before finishing",
+                    "Ask for a shorter answer or split the task.",
+                )
+                return (process_llm_response(full_response) + marker, None, budget_return, cost)
+            cause = (
+                f"the model spent its whole output budget ({budget}) on reasoning and "
+                f"stopped before writing an answer"
+            )
+            if reasoning_text:
+                return (no_answer_response(cause, reasoning_text), None, budget_return, cost)
+            return (
+                "",
+                (
+                    f"No answer: {cause}, and no reasoning text was streamed. The call is "
+                    f"billed. Split the task into smaller steps."
+                ),
+                None,
+                cost,
+            )
+
+        if not has_answer:
+            if reasoning_text:
+                cause = f"the stream ended (finish_reason={finish_reason}) without answer text"
+                return (no_answer_response(cause, reasoning_text), None, budget_return, cost)
+            reason = f", finish_reason={finish_reason}" if finish_reason else ""
+            return "", f"No content received from API (empty response{reason})", None, cost
 
         llm_response = process_llm_response(full_response)
 

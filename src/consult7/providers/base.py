@@ -76,6 +76,42 @@ def process_llm_response(response_content: Optional[str]) -> str:
     return response
 
 
+# Markers on a paid call that did not finish its answer. consultation.py looks for
+# them to warn the caller when the response went to output_file.
+TRUNCATED_TAG = "[TRUNCATED"  # last line of a partial answer
+NO_ANSWER_TAG = "[NO ANSWER"  # start of a response that holds only the reasoning
+
+
+def truncated_marker(cause: str, advice: str) -> str:
+    """The paragraph appended to an answer that was cut off."""
+    return f"\n\n{TRUNCATED_TAG} — output incomplete. {cause}. {advice}]"
+
+
+def no_answer_response(cause: str, reasoning: str) -> str:
+    """Salvage a paid call that wrote no answer text: its streamed reasoning under a marker.
+
+    The reasoning is often a summary of the model's thinking. When it is too long the
+    tail is kept, since it holds the latest state of the work.
+    """
+    if len(reasoning) > MAX_RESPONSE_SIZE:
+        omitted = len(reasoning) - MAX_RESPONSE_SIZE
+        reasoning = (
+            f"[... first {omitted:,} characters of the reasoning omitted ...]\n"
+            + reasoning[-MAX_RESPONSE_SIZE:]
+        )
+    return (
+        f"{NO_ANSWER_TAG} — {cause}. The call is billed. Below is the model's reasoning as "
+        f"streamed (often a summary), which may hold partial progress. To get an answer, "
+        f"split the task into smaller steps.]\n\n{reasoning}"
+    )
+
+
+def is_truncated(response: str) -> bool:
+    """True if the response ends with a consult7 [TRUNCATED ...] line (budget, time cap
+    or the MAX_RESPONSE_SIZE cut in process_llm_response)."""
+    return response.rsplit("\n", 1)[-1].startswith(TRUNCATED_TAG)
+
+
 class BaseProvider(ABC):
     """Abstract base class for LLM providers."""
 

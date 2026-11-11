@@ -24,7 +24,7 @@ from .token_utils import (
     calculate_max_file_size,
 )
 from .providers import PROVIDERS
-from .providers.base import estimate_input_tokens, pdf_page_count
+from .providers.base import NO_ANSWER_TAG, estimate_input_tokens, is_truncated, pdf_page_count
 
 logger = logging.getLogger("consult7")
 
@@ -268,7 +268,7 @@ async def consultation_impl(
             # effort_fable effort=xhigh (think tier; higher levels reserved)
             token_info += ", reasoning: effort=xhigh"
         elif thinking_budget in (-8, -9, -10):
-            # effort_gemini (Gemini 4 Argon / 3.8 Flash / 3.1 Pro): fast/mid/think = low/medium/high
+            # effort_gemini (Gemini 4 Carbon / Argon / 3.8 Flash / 3.1 Pro): fast/mid/think = low/medium/high
             token_info += f", reasoning: effort={('low', 'medium', 'high')[-8 - thinking_budget]}"
         elif thinking_budget > 0:
             # Calculate percentage of maximum possible reasoning tokens
@@ -328,8 +328,20 @@ async def consultation_impl(
                 f"{response}\n\n---\n{metadata_footer}"
             )
 
+        # The caller sees only this confirmation, so say when the file holds no
+        # complete answer (the marker itself is in the file)
+        if response.startswith(NO_ANSWER_TAG):
+            warning = (
+                "\nWarning: no answer was produced. The file holds only the model's "
+                "reasoning; the marker at its top says why."
+            )
+        elif is_truncated(response):
+            warning = "\nWarning: the answer is incomplete; the marker at its end says why."
+        else:
+            warning = ""
+
         # Confirmation + metadata footer so the caller can see what actually ran
-        return f"Result has been saved to {save_path}\n\n---\n{metadata_footer}"
+        return f"Result has been saved to {save_path}{warning}\n\n---\n{metadata_footer}"
 
     # Normal mode: return full response with metadata
     return f"{response}\n\n---\n{metadata_footer}"

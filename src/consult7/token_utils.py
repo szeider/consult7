@@ -55,6 +55,11 @@ THINKING_LIMITS = {
     # mode: fast=low, mid=medium, think=high. Probed reasoning tokens low/medium/high:
     # Argon 0/450/1.2K (low skips thinking), 3.8 Flash 420/1.1K/2.7K, 3.1 Pro
     # 1.2K/1.7K/4.5K. xhigh is accepted but not above high.
+    # Gemini 4 Carbon (flagship since 2026-11-10): same shape as Argon (low skips thinking,
+    # bare ≈ medium, xhigh/max ≈ high, `none` → 400) but high thinks about 5x as much as
+    # Argon's: 18-28K reasoning tokens on a counting question where Argon used 4.8K
+    # (probe 2026-11-11). See FULL_OUTPUT_REASONING.
+    "google/gemini-4-carbon": "effort_gemini",
     "google/gemini-4-argon": "effort_gemini",
     "google/gemini-3.8-flash": "effort_gemini",
     "google/gemini-3.1-pro-preview": "effort_gemini",  # legacy
@@ -111,6 +116,7 @@ MODEL_REASONING_BEHAVIOR = {
     "anthropic/claude-sonnet-4.5": REASONING_FROM_OUTPUT,  # legacy
     "anthropic/claude-opus-4.5": REASONING_FROM_OUTPUT,  # legacy
     # Gemini effort_gemini models: completion_tokens include reasoning
+    "google/gemini-4-carbon": REASONING_FROM_OUTPUT,
     "google/gemini-4-argon": REASONING_FROM_OUTPUT,
     "google/gemini-3.8-flash": REASONING_FROM_OUTPUT,
     "google/gemini-3.1-pro-preview": REASONING_FROM_OUTPUT,  # legacy
@@ -140,6 +146,9 @@ MODEL_MAX_OUTPUT = {
     "anthropic/claude-haiku-4.5": 16_000,
     "anthropic/claude-sonnet-4.5": 64_000,  # legacy
     "anthropic/claude-opus-4.5": 32_000,  # legacy
+    # Gemini 4 Carbon / Argon: OpenRouter lists 943K max output, but only the Vertex global
+    # endpoint offers it; 65,536 keeps the Vertex regional endpoints eligible too.
+    "google/gemini-4-carbon": 65_536,
     "google/gemini-4-argon": 65_536,
     "google/gemini-3.8-flash": 65_536,
     "google/gemini-3.1-pro-preview": 65_536,  # legacy
@@ -154,7 +163,26 @@ MODEL_MAX_OUTPUT = {
     "x-ai/grok-4-fast": 131_072,  # legacy
 }
 
-# effort_gemini markers (Gemini 4 Argon / 3.8 Flash / 3.1 Pro), sent in fast/mid/think
+# Models that get the full MODEL_MAX_OUTPUT as max_tokens instead of DYNAMIC_REASONING_RATIO
+# of it (effort_fable: in mid/think; effort_gemini: in every mode).
+# At 64K, Fable 5.1 spent the whole budget reasoning on hard proofs and wrote no answer
+# (2026-10-31, $4+ per call). With 1M context, reserving 128K costs little input room. Grok 4.6/4.7 stay at 64K: 500K context, where the
+# reservation would cut the input room (and the ULTRA bundle size) by 64K tokens.
+# Gemini 4 Carbon: think (effort high) wrote up to 29.4K completion tokens on a counting
+# question (2026-11-11), which leaves no margin under the 32,768 that Argon and Flash get.
+# At 65,536 OpenRouter routes to Vertex instead of AI Studio (endpoint cap 32,768), same
+# price, ZDR still available.
+FULL_OUTPUT_REASONING = frozenset(
+    {
+        "anthropic/claude-fable-5.1",
+        "anthropic/claude-fable-5",  # legacy
+        "openai/gpt-6-astra",
+        "openai/gpt-6.1-terra",
+        "google/gemini-4-carbon",
+    }
+)
+
+# effort_gemini markers (Gemini 4 Carbon / Argon / 3.8 Flash / 3.1 Pro), sent in fast/mid/think
 EFFORT_GEMINI = ("effort_gemini_low", "effort_gemini_medium", "effort_gemini_high")
 
 # Default max output when model not in table
@@ -215,7 +243,7 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value in ("effort_fable_high", "effort_fable_xhigh") + EFFORT_GEMINI:
         # effort_fable (Fable 5.x / Grok 4.6+ / GPT-6 Astra) and effort_gemini (Gemini 4
-        # Argon / 3.8 Flash / 3.1 Pro): effort honored; reasoning consumes output budget — dynamic ratio
+        # Carbon / Argon / 3.8 Flash / 3.1 Pro): effort honored; reasoning consumes output budget — dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value is not None:
         thinking_budget = thinking_budget_value
@@ -268,7 +296,7 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
     # Get model's max thinking limit
     limit = THINKING_LIMITS.get(model_name)
 
-    # Gemini 4 Argon / 3.8 Flash / 3.1 Pro: an explicit effort in every mode, fast included
+    # Gemini 4 Carbon / Argon / 3.8 Flash / 3.1 Pro: an explicit effort in every mode, fast included
     if limit == "effort_gemini":
         return {"fast": "effort_gemini_low", "mid": "effort_gemini_medium"}.get(
             mode, "effort_gemini_high"
@@ -360,7 +388,10 @@ def calculate_reasoning_max_tokens(
 
     elif thinking_budget in ("effort_fable_high", "effort_fable_xhigh") + EFFORT_GEMINI:
         # Fable 5.x / Grok 4.6+ / GPT-6 Astra / effort_gemini models: effort honored;
-        # reasoning counts toward max_tokens. Generous headroom — 50% of the model ceiling.
+        # reasoning counts toward max_tokens. FULL_OUTPUT_REASONING models get the full
+        # ceiling, the others 50% of it.
+        if model_name in FULL_OUTPUT_REASONING:
+            return model_max
         return int(model_max * DYNAMIC_REASONING_RATIO)
 
     elif isinstance(thinking_budget, int):

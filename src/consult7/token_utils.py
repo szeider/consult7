@@ -1,7 +1,7 @@
 """Token estimation and thinking budget utilities for Consult7."""
 
 from typing import Optional
-from .constants import DEFAULT_OUTPUT_TOKENS
+from .constants import DEFAULT_OUTPUT_TOKENS, FUSION_MODEL
 
 # Token and model constants
 TOKEN_SAFETY_FACTOR = 0.9  # Safety buffer for token calculations
@@ -43,6 +43,11 @@ THINKING_LIMITS = {
     # wrong answers), bare ≈ medium, effort honored (probe 2026-10-27, local/probe-terra.md)
     # — same shape as Astra, so effort_fable: fast = bare, mid = high, think = xhigh. ZDR 404.
     "openai/gpt-6.1-terra": "effort_fable",
+    # Meta Muse Wonder ($4/$20, 1M context): reasoning mandatory (`none` → 400), bare ≈
+    # medium, effort honored low < medium < high < xhigh ≈ max (probe 2026-11-17,
+    # local/probe-muse-raw.jsonl) — effort_fable: fast = bare, mid = high, think = xhigh.
+    # ZDR 200 (Google Vertex route only, which streams no reasoning text).
+    "meta/muse-wonder": "effort_fable",
     # GPT-5.6 Sol: OpenRouter honors the effort scale (verified low/med/high/xhigh all 200,
     # reasoning tokens scale 457/516/942 on a hard prompt) — same shape as gpt-5.5.
     "openai/gpt-5.6-sol": "effort",  # legacy
@@ -101,6 +106,7 @@ MODEL_REASONING_BEHAVIOR = {
     # OpenAI: reasoning consumes max_tokens, effort-based (can use 50k+ tokens)
     "openai/gpt-6-astra": REASONING_FROM_OUTPUT,
     "openai/gpt-6.1-terra": REASONING_FROM_OUTPUT,
+    "meta/muse-wonder": REASONING_FROM_OUTPUT,
     "openai/gpt-5.6-sol": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.5": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.4": REASONING_FROM_OUTPUT,  # legacy
@@ -135,6 +141,7 @@ MODEL_MAX_OUTPUT = {
     "anthropic/claude-fable-5": 128_000,  # legacy
     "openai/gpt-6-astra": 128_000,
     "openai/gpt-6.1-terra": 128_000,
+    "meta/muse-wonder": 128_000,  # /models reports 943,718; max_tokens reserves context
     "openai/gpt-5.6-sol": 128_000,  # legacy
     "openai/gpt-5.5": 128_000,  # legacy
     "openai/gpt-5.4": 128_000,  # legacy
@@ -179,14 +186,39 @@ FULL_OUTPUT_REASONING = frozenset(
         "openai/gpt-6-astra",
         "openai/gpt-6.1-terra",
         "google/gemini-4-carbon",
+        # Muse Wonder: think (xhigh) spent 57.9K reasoning tokens on a 45K-token referee
+        # task (2026-11-17), which leaves no margin at 64K
+        "meta/muse-wonder",
     }
 )
+
+# max_tokens in fast mode for models that reason by default although fast sends no
+# reasoning parameter. Muse Wonder reasons at about effort medium then; with the base
+# 8,000 it spent the whole budget on reasoning (field report 2026-11-17).
+FAST_MAX_TOKENS = {
+    "meta/muse-wonder": 64_000,
+}
 
 # effort_gemini markers (Gemini 4 Carbon / Argon / 3.8 Flash / 3.1 Pro), sent in fast/mid/think
 EFFORT_GEMINI = ("effort_gemini_low", "effort_gemini_medium", "effort_gemini_high")
 
 # Default max output when model not in table
 DEFAULT_MAX_OUTPUT = 32_000
+
+# Untuned models (not in THINKING_LIMITS) get no reasoning parameters, but many reason
+# by default. At the old 8,000-token budget such a model spent everything on reasoning
+# and wrote no answer (field report 2026-11-17, meta/muse-wonder, 68K input tokens).
+# They now get the output limit that OpenRouter's model list reports, capped here;
+# DEFAULT_MAX_OUTPUT when the list gives none.
+UNTUNED_MAX_OUTPUT = 64_000
+
+
+def untuned_max_tokens(model_name: str, reported_max_output: Optional[int]) -> Optional[int]:
+    """max_tokens for a model outside the tuned tables, or None for a tuned model."""
+    if model_name in THINKING_LIMITS or model_name == FUSION_MODEL:
+        return None
+    return min(reported_max_output or DEFAULT_MAX_OUTPUT, UNTUNED_MAX_OUTPUT)
+
 
 # Native PDF input (v3.12.0): approximate prompt tokens per page, by vendor
 # prefix of the model ID. Measured 2026-10-27 on a dense 15-page typeset paper
@@ -199,6 +231,7 @@ PDF_TOKENS_PER_PAGE = {
     "anthropic/": 2_600,
     "x-ai/": 3_000,
     "openai/": 1_600,
+    "meta/": 3_100,  # Meta route 3,088 per page; the Google Vertex route bills 786
     "openrouter/": 2_600,
 }
 PDF_TOKENS_PER_PAGE_DEFAULT = 2_000
@@ -359,7 +392,7 @@ def calculate_reasoning_max_tokens(
     """
     # Fast mode or no thinking: use base output tokens
     if mode == "fast" or thinking_budget is None:
-        return base_output_tokens
+        return FAST_MAX_TOKENS.get(model_name, base_output_tokens)
 
     # Get model's reasoning behavior (default to from_output for unknown models)
     behavior = MODEL_REASONING_BEHAVIOR.get(model_name, REASONING_FROM_OUTPUT)

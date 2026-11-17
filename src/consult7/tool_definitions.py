@@ -18,6 +18,7 @@ class ToolDescriptions:
             '"x-ai/grok-4.7" (Grok 4.7, 500K context, frontier Grok)',
             '"x-ai/grok-4.20" (Grok 4.20, 2M context, for giant bundles)',
             '"x-ai/grok-4.1-fast" (Grok 4.1 Fast, 2M context)',
+            '"meta/muse-wonder" (Meta Muse Wonder, 1M context, effort-based reasoning; mid and think take minutes)',
             '"openrouter/fusion" (Fusion: multi-model panel + judge, 128K context; mode = research depth)',
         ],
     }

@@ -129,6 +129,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 | `x-ai/grok-4.7` | 500k | Frontier Grok, effort-based reasoning |
 | `x-ai/grok-4.20` | 2M | Automatic reasoning, huge context |
 | `x-ai/grok-4.1-fast` | 2M | Largest context window |
+| `meta/muse-wonder` | 1M | Meta Muse Wonder, effort-based reasoning; long thinking in `mid` and `think` |
 | `openrouter/fusion` | 128k | Multi-model panel + judge (see Featured: Fusion) |
 
 Superseded IDs still work with their tuned settings: `openai/gpt-5.6-sol`, `openai/gpt-5.5`, `x-ai/grok-4.6`, `anthropic/claude-fable-5`, `google/gemini-3.1-pro-preview`.
@@ -239,6 +240,10 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.15.0
+- **Meta Muse Wonder** (`meta/muse-wonder`) added: 1M context, $4/$20 per million tokens, PDF input, ZDR supported. Reasoning cannot be switched off; `fast` sends no effort (the model's default, about medium), `mid` sends `high`, `think` sends `xhigh`. The output budget is 128,000 tokens in `mid` and `think` and 64,000 in `fast`. Under ZDR the model sends nothing until the answer starts, which took up to 6.5 minutes on a 45K-token task.
+- **Models outside the tuned list get a larger output budget.** They now get the output limit that OpenRouter's model list reports, capped at 64,000 tokens (32,000 when the list reports none), instead of 8,000. The budget shrinks when the input needs the room, so an input that fit before still fits. Before, a model that reasons by default could spend all 8,000 tokens on reasoning and return no answer.
 
 ### v3.14.2
 - **A stream that breaks returns what arrived.** When OpenRouter reports an error after the stream has started, or the connection drops, the partial answer comes back with a `[TRUNCATED]` line that names the error, and a call that had only reasoned so far returns the streamed reasoning under `[NO ANSWER]`. With `output_file` both are saved and the confirmation line carries the warning. Before, the call returned only the error. Seen on Gemini 4 Carbon: in our tests it often sent nothing for three to four minutes between its reasoning and its answer, and OpenRouter ended one stream with `Network connection lost` after 300 seconds without data from the provider. That call was not billed. consult7 does not retry: rerun the call or narrow the question.

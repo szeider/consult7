@@ -33,6 +33,7 @@ from ..token_utils import (
     TOKEN_SAFETY_FACTOR,
     EFFORT_GEMINI,
     calculate_reasoning_max_tokens,
+    untuned_max_tokens,
 )
 
 logger = logging.getLogger("consult7")
@@ -79,8 +80,9 @@ class OpenRouterProvider(BaseProvider):
                     # Return in consistent format
                     return {
                         "context_length": model_info.get("context_length", DEFAULT_CONTEXT_LENGTH),
-                        "max_output_tokens": model_info.get(
-                            "max_completion_tokens", SMALL_OUTPUT_TOKENS
+                        # The limit sits under top_provider (None when not reported)
+                        "max_output_tokens": (model_info.get("top_provider") or {}).get(
+                            "max_completion_tokens"
                         ),
                         "provider": "openrouter",
                         "pricing": model_info.get("pricing"),
@@ -163,6 +165,13 @@ class OpenRouterProvider(BaseProvider):
         max_output_tokens = calculate_reasoning_max_tokens(
             model_name, mode_for_calc, thinking_budget, base_max_output_tokens
         )
+        # Untuned model: the reported output limit instead of the 8,000 default
+        untuned = untuned_max_tokens(model_name, model_info.get("max_output_tokens"))
+        if untuned is not None:
+            # Shrink it to what the input leaves free, so that the larger budget never
+            # rejects an input that the base budget accepts (small-context models)
+            fits = context_length - int(estimated_tokens / TOKEN_SAFETY_FACTOR) - 1
+            max_output_tokens = max(max_output_tokens, min(untuned, fits))
         # When the model list is unavailable the context falls back to 128K, which a
         # full-ceiling budget (128K) would fill entirely; keep half of it for input
         max_output_tokens = min(max_output_tokens, context_length // 2)

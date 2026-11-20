@@ -48,6 +48,13 @@ THINKING_LIMITS = {
     # local/probe-muse-raw.jsonl) — effort_fable: fast = bare, mid = high, think = xhigh.
     # ZDR 200 (Google Vertex route only, which streams no reasoning text).
     "meta/muse-wonder": "effort_fable",
+    # Gemini 4 Neon (GEMT since v3.16.0, $3/$15, 1M context): reasoning mandatory (`none` →
+    # 400), bare ≈ medium, but unlike Carbon/Argon `low` still thinks (~700 reasoning
+    # tokens) and xhigh is well above high (lattice prompt low/medium/high/xhigh ≈
+    # 0.7K/1.2K/1.2K/4.2K; counting question medium/high/xhigh 7.8K/11.9K/34K, probe
+    # 2026-11-20, local/probe-neon.md). So effort_fable, not effort_gemini: fast = bare,
+    # mid = high, think = xhigh. ZDR 200 (Google Vertex global, the only route).
+    "google/gemini-4-neon": "effort_fable",
     # GPT-5.6 Sol: OpenRouter honors the effort scale (verified low/med/high/xhigh all 200,
     # reasoning tokens scale 457/516/942 on a hard prompt) — same shape as gpt-5.5.
     "openai/gpt-5.6-sol": "effort",  # legacy
@@ -107,6 +114,7 @@ MODEL_REASONING_BEHAVIOR = {
     "openai/gpt-6-astra": REASONING_FROM_OUTPUT,
     "openai/gpt-6.1-terra": REASONING_FROM_OUTPUT,
     "meta/muse-wonder": REASONING_FROM_OUTPUT,
+    "google/gemini-4-neon": REASONING_FROM_OUTPUT,
     "openai/gpt-5.6-sol": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.5": REASONING_FROM_OUTPUT,  # legacy
     "openai/gpt-5.4": REASONING_FROM_OUTPUT,  # legacy
@@ -142,6 +150,10 @@ MODEL_MAX_OUTPUT = {
     "openai/gpt-6-astra": 128_000,
     "openai/gpt-6.1-terra": 128_000,
     "meta/muse-wonder": 128_000,  # /models reports 943,718; max_tokens reserves context
+    # Gemini 4 Neon: /models reports 943,718; its only endpoint (Vertex global) served
+    # 32,768 / 65,536 / 131,072 at list price. 128,000 as for the other 1M-context
+    # FULL_OUTPUT_REASONING models.
+    "google/gemini-4-neon": 128_000,
     "openai/gpt-5.6-sol": 128_000,  # legacy
     "openai/gpt-5.5": 128_000,  # legacy
     "openai/gpt-5.4": 128_000,  # legacy
@@ -189,14 +201,19 @@ FULL_OUTPUT_REASONING = frozenset(
         # Muse Wonder: think (xhigh) spent 57.9K reasoning tokens on a 45K-token referee
         # task (2026-11-17), which leaves no margin at 64K
         "meta/muse-wonder",
+        # Gemini 4 Neon: think (xhigh) wrote up to 36,886 completion tokens on a short
+        # counting question (2026-11-20), which leaves little margin at 64K
+        "google/gemini-4-neon",
     }
 )
 
 # max_tokens in fast mode for models that reason by default although fast sends no
 # reasoning parameter. Muse Wonder reasons at about effort medium then; with the base
 # 8,000 it spent the whole budget on reasoning (field report 2026-11-17).
+# Gemini 4 Neon: bare ≈ medium, 9,077 completion tokens on a counting question (2026-11-20).
 FAST_MAX_TOKENS = {
     "meta/muse-wonder": 64_000,
+    "google/gemini-4-neon": 64_000,
 }
 
 # effort_gemini markers (Gemini 4 Carbon / Argon / 3.8 Flash / 3.1 Pro), sent in fast/mid/think
@@ -227,6 +244,11 @@ def untuned_max_tokens(model_name: str, reported_max_output: Optional[int]) -> O
 # Gemini bills a fixed image rate per page; the others scale with page content.
 # Fusion's panel includes Claude, so it takes the Claude figure.
 PDF_TOKENS_PER_PAGE = {
+    # Matched in order, so a model entry goes before its vendor prefix.
+    # Gemini 4 Neon: 996 per typeset page (2026-11-20). Scanned pages not measured; taken
+    # at the typeset figure, since Argon and 3.8 Flash billed a scan at most about their
+    # typeset rate (564 vs 1,271; 532 vs 525).
+    "google/gemini-4-neon": 1_000,
     "google/": 600,
     "anthropic/": 2_600,
     "x-ai/": 3_000,

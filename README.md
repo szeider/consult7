@@ -120,7 +120,7 @@ Consult7 supports **all 500+ models** available on OpenRouter. Below are the fla
 |-------|---------|----------|
 | `openai/gpt-6-astra` | 1M | Latest top-tier GPT, effort-based reasoning; premium price |
 | `openai/gpt-6.1-terra` | 1M | Cheap GPT at a tenth of Astra's price; no ZDR |
-| `google/gemini-4-neon` | 1M | **Flagship Gemini, effort-based reasoning; long thinking in `think`** |
+| `google/gemini-4-neon` | 1M | **Flagship Gemini, effort-based reasoning (low/medium/high); 65,536 output tokens** |
 | `google/gemini-4-carbon` | 1M | Previous Gemini flagship, cheaper per token |
 | `google/gemini-4-argon` | 1M | Previous Gemini flagship, faster in `think` |
 | `google/gemini-3.8-flash` | 1M | **Gemini 3.8 Flash, fast and cheap** |
@@ -138,7 +138,7 @@ Superseded IDs still work with their tuned settings: `openai/gpt-5.6-sol`, `open
 
 **Quick mnemonics:**
 - `gptt` = `openai/gpt-6-astra` + `think` (latest GPT, deep reasoning [effort xhigh]; premium)
-- `gemt` = `google/gemini-4-neon` + `think` (Gemini 4 Neon, deep reasoning [effort xhigh])
+- `gemt` = `google/gemini-4-neon` + `think` (Gemini 4 Neon, deep reasoning [effort high])
 - `grot` = `x-ai/grok-4.7` + `think` (Grok 4.7, deep reasoning [effort xhigh]; 500K context — use `x-ai/grok-4.20` for bigger bundles)
 - `oput` = `anthropic/claude-opus-4.8` + `think` (Claude Opus, adaptive thinking)
 - `opuf` = `anthropic/claude-opus-4.8` + `fast` (Claude Opus, no reasoning)
@@ -152,7 +152,7 @@ You can use any OpenRouter model ID (e.g., `deepseek/deepseek-r1-0528`). See the
 
 ## Performance Modes
 
-- **`fast`**: No reasoning requested - quick answers, simple tasks. GPT-6 Astra, Grok 4.7, Fable and Gemini 4 Neon reason by design, so on them `fast` means their own default level (billed), shown in the footer as `reasoning: model default`. Gemini 4 Carbon, 4 Argon, 3.8 Flash and 3.1 Pro get an explicit effort in every mode: `fast` = low, `mid` = medium, `think` = high
+- **`fast`**: No reasoning requested - quick answers, simple tasks. GPT-6 Astra, Grok 4.7 and Fable reason by design, so on them `fast` means their own default level (billed), shown in the footer as `reasoning: model default`. Gemini 4 Neon, 4 Carbon, 4 Argon, 3.8 Flash and 3.1 Pro get an explicit effort in every mode: `fast` = low, `mid` = medium, `think` = high
 - **`mid`**: Moderate reasoning - code reviews, bug analysis
 - **`think`**: Maximum reasoning - security audits, complex refactoring
 
@@ -242,6 +242,9 @@ claude mcp remove consult7 -s user
 ```
 
 ## Version History
+
+### v3.16.1
+- **Gemini 4 Neon** now uses the same effort mapping as the other Gemini models: `fast` = low, `mid` = medium, `think` = high, and an output budget of 65,536 tokens in every mode. In v3.16.0 `think` sent `xhigh` with a budget of 128,000 tokens, which OpenRouter accepts, but the provider stops at 65,536. On a 40K-token five-part review, `think` returned no answer in three of three runs: it spent all 65,536 output tokens on reasoning (about $1.08 per call). `mid` (effort high) answered the same review in about 5 minutes. A `[NO ANSWER]` or `[TRUNCATED]` line for Neon now states the true budget.
 
 ### v3.16.0
 - **Gemini 4 Neon** (`google/gemini-4-neon`) is the new flagship Gemini and the `gemt` model: 1M context, $3/$15 per million tokens, PDF input (about 1,000 tokens per typeset page), ZDR supported. Unlike the other Gemini models it uses the same effort mapping as GPT-6 Astra and Fable: `fast` sends no effort (the model's default, about medium), `mid` sends `high`, `think` sends `xhigh`. Its reasoning cannot be switched off, and even its lowest effort still thinks. The output budget is 128,000 tokens in `mid` and `think` and 64,000 in `fast`. In our tests `think` took about 5 minutes on a hard counting question (about 35K reasoning tokens, $0.55), where Carbon at `think` took 7 minutes; Neon streamed its reasoning throughout, without the minutes of silence seen on Carbon.

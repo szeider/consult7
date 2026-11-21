@@ -147,9 +147,8 @@ async def main():
                             "enum": ["fast", "mid", "think"],
                             "description": (
                                 "Performance mode: 'fast' (no reasoning requested, fastest; "
-                                "GPT-6 Astra, Grok 4.7, Fable and Gemini 4 Neon still reason at "
-                                "their own default level; the other listed Gemini models get "
-                                "effort low), "
+                                "GPT-6 Astra, Grok 4.7 and Fable still reason at their own "
+                                "default level; the listed Gemini models get effort low), "
                                 "'mid' (moderate reasoning), "
                                 "'think' (maximum reasoning)"
                             ),

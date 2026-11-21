@@ -48,13 +48,6 @@ THINKING_LIMITS = {
     # local/probe-muse-raw.jsonl) — effort_fable: fast = bare, mid = high, think = xhigh.
     # ZDR 200 (Google Vertex route only, which streams no reasoning text).
     "meta/muse-wonder": "effort_fable",
-    # Gemini 4 Neon (GEMT since v3.16.0, $3/$15, 1M context): reasoning mandatory (`none` →
-    # 400), bare ≈ medium, but unlike Carbon/Argon `low` still thinks (~700 reasoning
-    # tokens) and xhigh is well above high (lattice prompt low/medium/high/xhigh ≈
-    # 0.7K/1.2K/1.2K/4.2K; counting question medium/high/xhigh 7.8K/11.9K/34K, probe
-    # 2026-11-20, local/probe-neon.md). So effort_fable, not effort_gemini: fast = bare,
-    # mid = high, think = xhigh. ZDR 200 (Google Vertex global, the only route).
-    "google/gemini-4-neon": "effort_fable",
     # GPT-5.6 Sol: OpenRouter honors the effort scale (verified low/med/high/xhigh all 200,
     # reasoning tokens scale 457/516/942 on a hard prompt) — same shape as gpt-5.5.
     "openai/gpt-5.6-sol": "effort",  # legacy
@@ -72,6 +65,14 @@ THINKING_LIMITS = {
     # Argon's: 18-28K reasoning tokens on a counting question where Argon used 4.8K
     # (probe 2026-11-11). See FULL_OUTPUT_REASONING.
     "google/gemini-4-carbon": "effort_gemini",
+    # Gemini 4 Neon (GEMT since v3.16.0, $3/$15, 1M context): reasoning mandatory (`none` →
+    # 400), bare ≈ medium; `low` still thinks (~700 reasoning tokens) and xhigh is about 3x
+    # high (probe 2026-11-20, local/probe-neon.md). v3.16.0 used effort_fable (think =
+    # xhigh), but the provider stops at 65,536 completion tokens, and xhigh on a 40K-token
+    # five-part review spent all of them on reasoning (finish_reason length, 65,533
+    # reasoning tokens, no answer, $1.08; 2026-11-21). effort_gemini since v3.16.1:
+    # fast = low, mid = medium, think = high. ZDR 200 (Google Vertex global, the only route).
+    "google/gemini-4-neon": "effort_gemini",
     "google/gemini-4-argon": "effort_gemini",
     "google/gemini-3.8-flash": "effort_gemini",
     "google/gemini-3.1-pro-preview": "effort_gemini",  # legacy
@@ -150,10 +151,10 @@ MODEL_MAX_OUTPUT = {
     "openai/gpt-6-astra": 128_000,
     "openai/gpt-6.1-terra": 128_000,
     "meta/muse-wonder": 128_000,  # /models reports 943,718; max_tokens reserves context
-    # Gemini 4 Neon: /models reports 943,718; its only endpoint (Vertex global) served
-    # 32,768 / 65,536 / 131,072 at list price. 128,000 as for the other 1M-context
-    # FULL_OUTPUT_REASONING models.
-    "google/gemini-4-neon": 128_000,
+    # Gemini 4 Neon: /models reports 943,718 and max_tokens 128,000 is accepted, but the
+    # provider stops at 65,536 completion tokens (finish_reason length, native
+    # CONTINUATION, 2026-11-21).
+    "google/gemini-4-neon": 65_536,
     "openai/gpt-5.6-sol": 128_000,  # legacy
     "openai/gpt-5.5": 128_000,  # legacy
     "openai/gpt-5.4": 128_000,  # legacy
@@ -201,8 +202,7 @@ FULL_OUTPUT_REASONING = frozenset(
         # Muse Wonder: think (xhigh) spent 57.9K reasoning tokens on a 45K-token referee
         # task (2026-11-17), which leaves no margin at 64K
         "meta/muse-wonder",
-        # Gemini 4 Neon: think (xhigh) wrote up to 36,886 completion tokens on a short
-        # counting question (2026-11-20), which leaves little margin at 64K
+        # Gemini 4 Neon: the full 65,536 in every mode, as Carbon
         "google/gemini-4-neon",
     }
 )
@@ -210,13 +210,11 @@ FULL_OUTPUT_REASONING = frozenset(
 # max_tokens in fast mode for models that reason by default although fast sends no
 # reasoning parameter. Muse Wonder reasons at about effort medium then; with the base
 # 8,000 it spent the whole budget on reasoning (field report 2026-11-17).
-# Gemini 4 Neon: bare ≈ medium, 9,077 completion tokens on a counting question (2026-11-20).
 FAST_MAX_TOKENS = {
     "meta/muse-wonder": 64_000,
-    "google/gemini-4-neon": 64_000,
 }
 
-# effort_gemini markers (Gemini 4 Carbon / Argon / 3.8 Flash / 3.1 Pro), sent in fast/mid/think
+# effort_gemini markers (Gemini 4 Neon / Carbon / Argon / 3.8 Flash / 3.1 Pro), sent in fast/mid/think
 EFFORT_GEMINI = ("effort_gemini_low", "effort_gemini_medium", "effort_gemini_high")
 
 # Default max output when model not in table
@@ -298,7 +296,7 @@ def calculate_max_file_size(context_length: int, mode: str, model_name: str) -> 
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value in ("effort_fable_high", "effort_fable_xhigh") + EFFORT_GEMINI:
         # effort_fable (Fable 5.x / Grok 4.6+ / GPT-6 Astra) and effort_gemini (Gemini 4
-        # Carbon / Argon / 3.8 Flash / 3.1 Pro): effort honored; reasoning consumes output budget — dynamic ratio
+        # Neon / Carbon / Argon / 3.8 Flash / 3.1 Pro): effort honored; reasoning consumes output budget — dynamic ratio
         thinking_budget = int(output_reserve * DYNAMIC_REASONING_RATIO)
     elif thinking_budget_value is not None:
         thinking_budget = thinking_budget_value
@@ -351,7 +349,7 @@ def get_thinking_budget(model_name: str, mode: str) -> Optional[int]:
     # Get model's max thinking limit
     limit = THINKING_LIMITS.get(model_name)
 
-    # Gemini 4 Carbon / Argon / 3.8 Flash / 3.1 Pro: an explicit effort in every mode, fast included
+    # Gemini 4 Neon / Carbon / Argon / 3.8 Flash / 3.1 Pro: an explicit effort in every mode, fast included
     if limit == "effort_gemini":
         return {"fast": "effort_gemini_low", "mid": "effort_gemini_medium"}.get(
             mode, "effort_gemini_high"
